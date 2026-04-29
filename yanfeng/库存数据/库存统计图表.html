@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>库存统计图表</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial; margin:20px; }
+        .container { max-width: 1200px; margin:auto; background:white; padding:20px; border-radius:8px; }
+        h1 { text-align:center; }
+        .stats { display:flex; justify-content:space-around; margin:30px 0; flex-wrap:wrap; }
+        .stat-item { text-align:center; padding:15px; background:#f8f9fa; min-width:150px; margin:10px; border-radius:8px; }
+        .stat-value { font-size:24px; font-weight:bold; color:#007bff; }
+        .stat-label { font-size:14px; color:#666; }
+        .chart-container { height:400px; margin:20px 0; }
+        table { border-collapse:collapse; width:100%; margin:20px 0; }
+        th, td { border:1px solid #ddd; padding:8px; text-align:left; }
+        th { background-color:#4CAF50; color:white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>库存统计图表</h1>
+    <div class="stats">
+        <div class="stat-item"><div class="stat-value">10,028.95</div><div class="stat-label">领用金额</div></div>
+        <div class="stat-item"><div class="stat-value">40,263.29</div><div class="stat-label">隔离金额</div></div>
+        <div class="stat-item"><div class="stat-value">0.00</div><div class="stat-label">退库总价</div></div>
+    </div>
+    <div class="chart-container"><canvas id="barChart"></canvas></div>
+    <div class="chart-container"><canvas id="pieChart"></canvas></div>
+    <h2>项目领用统计 (前10名)</h2>
+    <table><tr><th>排名</th><th>项目名</th><th>领用总价</th></tr>
+<tr><td>1</td><td>260085-780B Auto Spray</td><td>19,779.34</td></tr>
+<tr><td>2</td><td>260050-Click Rim方向盘热压包覆</td><td>3,718.31</td></tr>
+<tr><td>3</td><td>250379-长滑轨自动装配线</td><td>2,734.06</td></tr>
+<tr><td>4</td><td>260109-DAB自动包覆&EPW展示</td><td>2,148.25</td></tr>
+<tr><td>5</td><td>250383-F2N DAB门盖包覆胎模</td><td>1,928.14</td></tr>
+<tr><td>6</td><td>250262-W530 IP CUN  welding tool</td><td>1,627.54</td></tr>
+<tr><td>7</td><td>250188-MX11-9门盖包覆胎模A</td><td>1,387.60</td></tr>
+<tr><td>8</td><td>250362-MX增量灯头线</td><td>569.00</td></tr>
+<tr><td>9</td><td>260115-X90DP双组分喷胶设备 第二台</td><td>425.07</td></tr>
+<tr><td>10</td><td>240231-L234 RHD Top Skin Pre-Fix tooling</td><td>387.71</td></tr>
+</table>
+    <h2>隔离人统计 (前10名)</h2>
+    <table><tr><th>排名</th><th>隔离人</th><th>隔离总价</th></tr>
+<tr><td>1</td><td>报废</td><td>10,111.62</td></tr>
+<tr><td>2</td><td>王一飞</td><td>9,890.22</td></tr>
+<tr><td>3</td><td>陈洁</td><td>3,876.56</td></tr>
+<tr><td>4</td><td>齐永安</td><td>3,718.31</td></tr>
+<tr><td>5</td><td>张俣健</td><td>2,148.25</td></tr>
+<tr><td>6</td><td>陈帅</td><td>1,928.14</td></tr>
+<tr><td>7</td><td>徐义星</td><td>1,808.83</td></tr>
+<tr><td>8</td><td>程德宝</td><td>733.13</td></tr>
+<tr><td>9</td><td>陈佳荣</td><td>618.04</td></tr>
+<tr><td>10</td><td>陈雨杭</td><td>387.71</td></tr>
+</table>
+</div>
+<script>
+    new Chart(document.getElementById('barChart'), {
+        type:'bar', data:{ labels:['领用金额','隔离金额','退库总价'], datasets:[{ label:'金额', data:[10028.95,40263.29,0.0], backgroundColor:['rgba(54,162,235,0.8)','rgba(255,99,132,0.8)','rgba(75,192,192,0.8)'] }] },
+        options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>v.toLocaleString() } } } }
+    });
+    new Chart(document.getElementById('pieChart'), {
+        type:'pie', data:{ labels:['领用金额','隔离金额','退库总价'], datasets:[{ data:[10028.95,40263.29,0.0], backgroundColor:['rgba(54,162,235,0.8)','rgba(255,99,132,0.8)','rgba(75,192,192,0.8)'] }] },
+        options:{ responsive:true, maintainAspectRatio:false }
+    });
+</script>
+</body>
+</html>
