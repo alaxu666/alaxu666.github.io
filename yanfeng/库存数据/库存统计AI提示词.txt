@@ -34,6 +34,7 @@ dfRK表格中做以下操作：
 dfRK表格操作结束。
 
 对dfLY表格和dfRK表格操作结束后，检查dfXM_ZJ表格和dfTK_ZJ表格中“项目名”列中的数据，仅保留开头是6位数字的数据，把其他数据删除。
+对dfLY表格和dfRK表格操作结束后，导入“库存统计.py”所在路径下的“DATA\装备中心花名册.xlsx”中名为“花名册”的sheet,保存为dfCY，筛选出dfCY中，“部门”列为“PD”和“Manufacturing”的数据，其他数据全部删除，筛选后的数据替换原来的dfCY。删除dfRM_ZJ表格中，所有“隔离人”在dfCY表格中“姓名”中出现过的数据。
 
 导出dfXM_ZJ，dfRM_ZJ，dfTK_ZJ前，先对三个表的总价列进行降序排列。
 将dfXM_ZJ，dfRM_ZJ，dfTK_ZJ覆盖到C:\Users\uxuxs004\OneDrive - Yanfeng\work\产品安全\SSO\pythonProject\库存数据\本周库存统计.xlsx中名为dfXM_ZJ，dfRM_ZJ，dfTK_ZJ的三个工作表中。在本周库存统计.xlsx中，同时保存2026，dfXM_ZJ，dfRM_ZJ，dfTK_ZJ四个工作表。
