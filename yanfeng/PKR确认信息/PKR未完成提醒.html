@@ -1,0 +1,60 @@
+
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+                    table { border-collapse: collapse; width: 100%; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                    th { background-color: #4CAF50; color: white; font-weight: bold; }
+                    tr:nth-child(even) { background-color: #f2f2f2; }
+                    tr:hover { background-color: #e8f5e8; }
+                    tr.urgent { background-color: #ffebee; }
+                    tr.warning { background-color: #fff3e0; }
+                    h3 { color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
+                    .footer { margin-top: 20px; font-size: 12px; color: #666; }
+                    .status-submit { color: #d32f2f; font-weight: bold; }
+                    .status-confirm { color: #f57c00; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+            <h3>PKR确认状态未完成提醒</h3>
+            <table>
+            <tr>
+                <th>Project Name</th>
+                <th>当前状态</th>
+                <th>未完成PKR信息</th>
+                <th>是否确认</th>
+            </tr>
+            
+            <tr class="urgent">
+                <td>30033405-2026,AP,Huawei Anhui,F05 IP,Assembly,260038,M,Equipment</td>
+                <td>Phase 2 Gate Exit-DVR</td>
+                <td>Total,0
+Zhao Kailiang,0</td>
+                <td class="status-submit">未递交(工程师)</td>
+            </tr>
+                
+            <tr class="warning">
+                <td>30033404-2026,AP,VW Group,VW426-DP,Lamination,260033,M,Equipment</td>
+                <td>Phase 3 Gate Exit-FPR</td>
+                <td>完成</td>
+                <td class="status-confirm">未确认(cao liang)</td>
+            </tr>
+                
+            <tr class="warning">
+                <td>30032706-2025,AP,SERES Motors,A15-mirror, assy, 260006, 15T,Equipment</td>
+                <td>Phase 2 Gate Exit-DVR</td>
+                <td>完成</td>
+                <td class="status-confirm">未确认(cao liang)</td>
+            </tr>
+                
+            </table>
+            <div class="footer">
+                <p>总计 3 个项目需要关注</p>
+                <p><span class="status-submit">未递交(工程师)</span> - 需要工程师提交PKR</p>
+                <p><span class="status-confirm">未确认(cao liang)</span> - 需要曹亮确认</p>
+            </div>
+            </body>
+            </html>
+            

@@ -180,20 +180,93 @@ professional_html = f"""<!DOCTYPE html>
     <title>专业库存统计图表</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {{ font-family: Arial; margin:20px; background:#f5f5f5; }}
-        .container {{ max-width:1400px; margin:auto; background:white; padding:20px; border-radius:8px; }}
-        h1 {{ text-align:center; }}
-        .chart-container {{ height:600px; margin:20px 0; }}
-        .horizontal-chart-container {{ height:500px; margin:40px 0; }}
-        .legend {{ display:flex; justify-content:center; gap:20px; margin:20px 0; }}
-        .legend-item {{ display:flex; align-items:center; }}
-        .legend-color {{ width:20px; height:20px; margin-right:8px; border-radius:3px; }}
-        .color-2025 {{ background:#A6D396; }}
-        .color-ly {{ background:#20678A; }}
-        .color-gl {{ background:#F26E29; }}
-        .color-fy {{ background:#0F9ED5; }}
-        h2 {{ margin-top:40px; color:#156082; border-left:5px solid #156082; padding-left:15px; }}
-        .data-info {{ background:#f8f9fa; padding:15px; margin:20px 0; border-radius:5px; }}
+        /* 关键：A3横向布局 */
+        @page {{
+            size: A3 landscape;
+            margin: 0.5cm;
+        }}
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 5mm;
+            background: #f5f5f5;
+        }}
+        .container {{
+            width: 1200px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 8px;
+        }}
+        canvas {{
+            width: 1200px !important;
+            height: auto !important;
+            display: block;
+            max-width: 1200px;
+        }}
+        @media print {{
+            .container {{
+                width: 100%;
+                max-width: none;
+                margin: 0;
+            }}
+            canvas {{
+                width: 100% !important;
+                max-width: none;
+            }}
+        }}
+        h1 {{
+            text-align: center;
+            font-size: 24px;
+            margin: 10px 0;
+        }}
+        .legend {{
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+        }}
+        .legend-color {{
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }}
+        .color-2025 {{ background: #A6D396; }}
+        .color-ly {{ background: #20678A; }}
+        .color-gl {{ background: #F26E29; }}
+        .color-fy {{ background: #0F9ED5; }}
+        .chart-container {{
+            width: 1200px;
+            height: 560px;
+            margin: 20px auto;
+        }}
+        .horizontal-chart-container {{
+            width: 1200px;
+            height: 600px;
+            margin: 30px auto;
+        }}
+        h2 {{
+            margin-top: 40px;
+            color: #156082;
+            border-left: 5px solid #156082;
+            padding-left: 15px;
+            font-size: 20px;
+        }}
+        .data-info {{
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }}
     </style>
 </head>
 <body>
@@ -240,9 +313,9 @@ professional_html = f"""<!DOCTYPE html>
         ] }},
         options:{{ responsive:true, maintainAspectRatio:false, scales:{{ x:{{ stacked:true, title:{{ display:true, text:'周数' }}, ticks:{{ maxRotation:90, minRotation:45, autoSkip:false }} }}, y:{{ beginAtZero:true, title:{{ display:true, text:'金额 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }}, plugins:{{ tooltip:{{ callbacks:{{ label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toLocaleString() }} }} }} }}
     }});
-    new Chart(document.getElementById('barChartProject'), {{ type:'bar', data:{{ labels:projectNames, datasets:[{{ label:'领用总价', data:projectValues, backgroundColor:'#156082' }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'领用总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
-    new Chart(document.getElementById('barChartIsolator'), {{ type:'bar', data:{{ labels:isolatorNames, datasets:[{{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082' }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'隔离总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
-    new Chart(document.getElementById('barChartReturn'), {{ type:'bar', data:{{ labels:returnNames, datasets:[{{ label:'退库总价', data:returnValues, backgroundColor:'#156082' }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'退库总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartProject'), {{ type:'bar', data:{{ labels:projectNames, datasets:[{{ label:'领用总价', data:projectValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'领用总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartIsolator'), {{ type:'bar', data:{{ labels:isolatorNames, datasets:[{{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'隔离总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartReturn'), {{ type:'bar', data:{{ labels:returnNames, datasets:[{{ label:'退库总价', data:returnValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'退库总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
 </script>
 </body>
 </html>"""
@@ -253,9 +326,6 @@ print(f"专业库存图表已生成: {professional_html_file}")
 
 # ================== 将专业图表转换为PDF（横向纸张） ==================
 def html_to_pdf(html_path, pdf_path):
-    """
-    使用Edge或Chrome的无头模式将HTML转换为PDF（横向）。
-    """
     browser_paths = [
         "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
         "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -271,7 +341,13 @@ def html_to_pdf(html_path, pdf_path):
         print(f"未找到 Edge 或 Chrome 浏览器，无法将 {html_path} 转换为 PDF。")
         return False
 
-    cmd = [browser_exe, "--headless", "--disable-gpu", "--landscape", f"--print-to-pdf={pdf_path}", html_path]
+    cmd = [
+        browser_exe, "--headless", "--disable-gpu",
+        "--landscape",
+        "--virtual-time-budget=15000",
+        f"--print-to-pdf={pdf_path}",
+        html_path
+    ]
     try:
         startupinfo = None
         if sys.platform == "win32":
@@ -283,7 +359,7 @@ def html_to_pdf(html_path, pdf_path):
             cmd,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             encoding='utf-8',
             errors='ignore',
             startupinfo=startupinfo
@@ -294,6 +370,9 @@ def html_to_pdf(html_path, pdf_path):
         else:
             print(f"转换失败: {html_path} -> {pdf_path}, 错误: {result.stderr}")
             return False
+    except subprocess.TimeoutExpired:
+        print(f"转换超时（60秒）: {html_path}")
+        return False
     except Exception as e:
         print(f"转换异常: {e}")
         return False

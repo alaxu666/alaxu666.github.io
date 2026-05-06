@@ -1,0 +1,89 @@
+在采购自动确认.py中，增加一个函数，函数名叫AutomaticSupplierSelection。函数说明：网页中，自动判断选择最佳供应商。
+新建一个pandas表格，名为df_SupplierInfo，表格中增加列“序号”，“供应商代码”，“供应商名称“，“是否推荐”，“第一轮报价”，“不含税最终报价”
+（
+定点信息表：
+<table class="excelDetailTable" id="oTable0" name="oTable0" style="table-layout: fixed; width: 3107px;">需要这个表格
+<table class="excelDetailTable" id="oTable1" name="oTable1" style="table-layout: fixed; width: 1500px;">
+<table class="excelDetailTable" id="oTable2" name="oTable2" style="table-layout: fixed; width: 2628px;">
+）
+找到id="oTable0"的<table>，在这个<table>体中搜索所有存在data-rowindex属性的<tr>,并把这些data-rowindex的属性值转换成整数类型，保存到gys列表中。
+（
+定位data-rowindex="0"的<tr><tr id="" name="" class=" detail_odd_row detail_data_row" data-rowindex="0" style="height: 28px;">
+）
+对所有gys元素进行循环，
+（
+分别在这些<tr>体中，找到<td rowspan="1" colspan="1" class="detail_1_3_4 etype_3">，
+）
+定位data-rowindex=当前gys值的<tr>，并在这个<tr>体中做以下操作：
+提取class="detail_1_3_1 etype_22"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][0],（序号）
+提取class="detail_1_3_2 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][1],（供应商代码）
+提取class="detail_1_3_3 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][2],（供应商名称）
+提取class="detail_1_3_4 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][3],（是否推荐）
+提取class="detail_1_3_5 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][4],（第一轮报价）
+提取class="detail_1_3_6 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][5],（不含税最终报价）
+在class="detail_1_3_21 etype_3"的<td>体中，点击<div class="ant-select ant-select-enabled">下拉按钮，在跳出的下拉框中，点击<li unselectable="unselectable" title="是" class="ant-select-dropdown-menu-item" role="menuitem" aria-selected="false" style="user-select: none;">是</li>
+在class="detail_1_3_22 etype_3"的<td>体中，点击<div class="ant-select ant-select-enabled">下拉按钮，在跳出的下拉框，如果SFTJ[当前gys值][5]为“0.00”，则点击<li unselectable="unselectable" title="否" class="ant-select-dropdown-menu-item-selected ant-select-dropdown-menu-item" role="menuitem" aria-selected="true" style="user-select: none;">否</li>；否则点击<li unselectable="unselectable" title="是" class="ant-select-dropdown-menu-item" role="menuitem" aria-selected="false" style="user-select: none;">是</li>
+在class="detail_1_3_23 etype_3"的<td>体中的<input>输入框中，如果如果SFTJ[当前gys值][3]为“N”，则输入“一般”，否则输入“良好”
+在class="detail_1_3_24 etype_3"的<td>体中的<input>输入框中，如果如果SFTJ[当前gys值][3]为“N”，则输入“一般”，否则输入“良好”
+结束gys元素循环
+把所有SFTJ的列表数据，转换到df_SupplierInfo中，gys列表有多少元素，则df_SupplierInfo就有多少行的数据。
+最后通过print打印出df_SupplierInfo收集到的数据。
+
+
+
+
+在采购自动确认.py中，增加一个函数，函数名叫AutomaticSupplierSelection。函数说明：网页中，自动判断选择最佳供应商。
+新建一个pandas表格，名为df_SupplierInfo，表格中增加列“序号”，“供应商代码”，“供应商名称”，“是否推荐”，“第一轮报价”，“不含税最终报价”
+找到id="oTable0"的<table>，在这个<table>体中搜索所有存在data-rowindex属性的<tr>,并把这些data-rowindex的属性值转换成整数类型，保存到gys列表中。
+对所有gys元素进行循环，
+定位data-rowindex=当前gys值的<tr>，并在这个<tr>体中做以下操作：
+提取class="detail_1_3_1 etype_22"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][0],
+提取class="detail_1_3_2 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][1],
+提取class="detail_1_3_3 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][2],
+提取class="detail_1_3_4 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][3],
+提取class="detail_1_3_5 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][4],
+提取class="detail_1_3_6 etype_3"的<td>体中的<span>标签的显示文本，并以字符串类型，赋值给列表SFTJ[当前gys值][5],
+在class="detail_1_3_21 etype_3"的<td>体中，点击<div class="ant-select ant-select-enabled">下拉按钮，在跳出的下拉框中，点击unselectable="unselectable"且显示文本是“是”的<li>
+在class="detail_1_3_22 etype_3"的<td>体中，点击<div class="ant-select ant-select-enabled">下拉按钮，在跳出的下拉框，如果SFTJ[当前gys值][5]为“0.00”，则点击unselectable="unselectable"且显示文本是“否”的<li>；否则点击unselectable="unselectable"且显示文本是“是”的<li>
+在class="detail_1_3_23 etype_3"的<td>体中的<input>输入框中，如果如果SFTJ[当前gys值][3]为“N”，则输入“一般”，否则输入“良好”
+在class="detail_1_3_24 etype_3"的<td>体中的<input>输入框中，如果如果SFTJ[当前gys值][3]为“N”，则输入“一般”，否则输入“良好”
+结束gys元素循环
+AutomaticSupplierSelection最后结束gys元素循环后，点击title="批准"的<button>
+点完批准button后，不要关闭新窗口。批准完成后，窗口会自动关闭，如果程序提前将网页关闭，可能会导致批准不成功。
+批准按钮点击后，在当前页面没有自动关闭的时候，如果打开新的页面，则系统会提示另一个流程正在执行，无法处理当前流程，然后会强制断开服务。所以在按批准按钮后，需要等待当前页面自动关闭后，在处理下一个循环。
+
+用python写一个代码，功能如下：
+新建一个函数，函数名叫PurchaseApplicationApproval，备注函数说明：自动寻找BPM中，未审批的采购申请，并自动审批。函数功能如下：
+新建一个pandas表格，名为df_PurchaseRequisition，表格中增加列“流程标题”，“流程名称”，“创建人”，“创建日期”，“未操作者”
+用浏览器打开网址：https://onebpm.yanfeng.com/wui/index.html#/main/portal/portal-1-1?menuIds=0,1&_key=a3r00x
+点击title="待办事宜"的<span>
+点击<div class="ant-select-selection
+              ant-select-selection--single" role="combobox" aria-autocomplete="list" aria-haspopup="true" aria-expanded="false" tabindex="0">跳出下拉框，在下拉框中选择“100条/页”
+找到class="ant-table-tbody"的<tbody>，扫描这个<tbody>中所有<tr>，把每一行<tr>中class="autoWrap"的<td>中最后<span>的显示文本，按顺序，依次保存到df_PurchaseRequisition的“流程标题”，“流程名称”，“创建人”，“创建日期”，“未操作者”中，每行<tr>对应df_PurchaseRequisition的一行数据。
+每行<tr>的第一列<td>不要读取，从第二个<td>开始以此读取（第二个<td>数据对应df_PurchaseRequisition的“流程标题”）。每一行<tr>的第二个<td>读取stsdata属性代替span显示文本，其他<td>保持提取span显示文本。
+第六个<td>列，这个<td>中嵌套了3个<span>，在第三个<span>中有显示文本，读取这个文本即可。
+所有<tr>提取完成后，把df_PurchaseRequisition中创建人为“徐时荣”的数据全部删除，并用print打印出来，不需要输出excel。
+对df_PurchaseRequisition中的所有“流程标题”数据进行循环:
+定位并点击stsdata=当前循环“流程标题”的数据，点击后会跳转到新页面，新页面加载完成后，在新页面中，执行def AutomaticSupplierSelection(driver)函数。函数执行完毕后，保留当前窗口不要关闭，回到初始窗口。
+对df_PurchaseRequisition中的所有“流程标题”数据的循环结束。
+对df_PurchaseRequisition中的所有“流程标题”数据的循环结束后，读取C:\Users\uxuxs004\OneDrive - Yanfeng\work\产品安全\SSO\pythonProject\采购自动确认\采购申请清单.csv，保留“采购申请清单.csv”中“创建日期”是上周及以后的数据，删除上周之前的数据，并把df_PurchaseRequisition添加到采购申请清单.csv中，覆盖原采购申请清单.csv即可。
+
+
+
+把所有SFTJ的列表数据，转换到df_SupplierInfo中，gys列表有多少元素，则df_SupplierInfo就有多少行的数据。
+最后通过print打印出df_SupplierInfo收集到的数据。
+
+创建登陆页面函数，函数名为Login
+用浏览器打开网址：https://onebpm.yanfeng.com/wui/index.html#/main/portal/portal-1-1?menuIds=0,1&_key=a3r00x
+等待页面跳转，如果页面跳转后，页面中有name="loginfmt"的<input>框，则在这个input框中输入“shirong.xu@yanfeng.com”。
+然后点击type="submit"的<input>
+再次等待页面跳转，如果页面跳转后，如果页面中有name="passwd"的<input>框，说明页面跳转成功，在这个input框中输入“2045O2O5-7”
+然后点击type="submit"的<input>
+等待页面跳转，如果页面跳转后，有title="待办事宜"的<span>，说明页面跳转成功。
+本函数结束。
+用Login函数，替换PurchaseApplicationApproval函数中，用浏览器打开网址：https://onebpm.yanfeng.com/wui/index.html#/main/portal/portal-1-1?menuIds=0,1&_key=a3r00x的动作。
+
+如果网页跳出ERR_TIMED_OUT错误页面或程序检测到超时，则自动重新加载。
+
+
+打开https://onebpm.yanfeng.com/spa/workflow/static4form/index.html?_rdm=1776912516416#/main/workflow/req?requestid=696096436&_workflowid=539&_workflowtype=&isovertime=0&preloadkey=1776912516416&timestamp=1776912516416&_key=0ehtax网页，并执行AutomaticSupplierSelection函数。

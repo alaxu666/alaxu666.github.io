@@ -5,20 +5,93 @@
     <title>专业库存统计图表</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial; margin:20px; background:#f5f5f5; }
-        .container { max-width:1400px; margin:auto; background:white; padding:20px; border-radius:8px; }
-        h1 { text-align:center; }
-        .chart-container { height:600px; margin:20px 0; }
-        .horizontal-chart-container { height:500px; margin:40px 0; }
-        .legend { display:flex; justify-content:center; gap:20px; margin:20px 0; }
-        .legend-item { display:flex; align-items:center; }
-        .legend-color { width:20px; height:20px; margin-right:8px; border-radius:3px; }
-        .color-2025 { background:#A6D396; }
-        .color-ly { background:#20678A; }
-        .color-gl { background:#F26E29; }
-        .color-fy { background:#0F9ED5; }
-        h2 { margin-top:40px; color:#156082; border-left:5px solid #156082; padding-left:15px; }
-        .data-info { background:#f8f9fa; padding:15px; margin:20px 0; border-radius:5px; }
+        /* 关键：A3横向布局 */
+        @page {
+            size: A3 landscape;
+            margin: 0.5cm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 5mm;
+            background: #f5f5f5;
+        }
+        .container {
+            width: 1200px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 8px;
+        }
+        canvas {
+            width: 1200px !important;
+            height: auto !important;
+            display: block;
+            max-width: 1200px;
+        }
+        @media print {
+            .container {
+                width: 100%;
+                max-width: none;
+                margin: 0;
+            }
+            canvas {
+                width: 100% !important;
+                max-width: none;
+            }
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }
+        .color-2025 { background: #A6D396; }
+        .color-ly { background: #20678A; }
+        .color-gl { background: #F26E29; }
+        .color-fy { background: #0F9ED5; }
+        .chart-container {
+            width: 1200px;
+            height: 560px;
+            margin: 20px auto;
+        }
+        .horizontal-chart-container {
+            width: 1200px;
+            height: 600px;
+            margin: 30px auto;
+        }
+        h2 {
+            margin-top: 40px;
+            color: #156082;
+            border-left: 5px solid #156082;
+            padding-left: 15px;
+            font-size: 20px;
+        }
+        .data-info {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -40,21 +113,21 @@
     <div class="data-info">
         <h3>图表说明</h3>
         <ul><li>区域图 (绿色)：2025年每周金额趋势</li><li>柱形图 (蓝色+橙色)：领用（下）+ 隔离（上）</li><li>线型图 (蓝色)：每周需复用金额</li><li>横向条形图：项目领用、隔离人隔离、项目退库 TOP15</li></ul>
-        <p>数据更新时间：2026-04-29 13:34:43</p>
+        <p>数据更新时间：2026-05-06 09:53:58</p>
     </div>
 </div>
 <script>
     const weekData = ["CW01", "CW02", "CW03", "CW04", "CW05", "CW06", "CW07", "CW08", "CW09", "CW10", "CW11", "CW12", "CW13", "CW14", "CW15", "CW16", "CW17", "CW18", "CW19", "CW20", "CW21", "CW22", "CW23", "CW24", "CW25", "CW26", "CW27", "CW28", "CW29", "CW30", "CW31", "CW32", "CW33", "CW34", "CW35", "CW36", "CW37", "CW38", "CW39", "CW40", "CW41", "CW42", "CW43", "CW44", "CW45", "CW46", "CW47", "CW48", "CW49", "CW50", "CW51", "CW52"];
     const data2025 = [168789.0, 79946.0, 158178.0, 41569.0, 81829.0, 15411.0, 187692.0, 52542.0, 62410.0, 430738.0, 348364.0, 373268.0, 559505.0, 267022.0, 283591.0, 266871.0, 383310.0, 117195.0, 76143.0, 82031.0, 176729.0, 112134.0, 119438.0, 254698.0, 218033.0, 248788.0, 325148.0, 195769.0, 84239.0, 156130.0, 165493.0, 251658.0, 68501.0, 154553.0, 180517.0, 67645.0, 300234.0, 244991.0, 177852.0, 92895.0, 20018.0, 74795.43, 109569.64, 88882.0, 57137.23, 29438.97, 71533.0, 72869.0, 133524.0, 82616.3, 198522.38, 201928.51];
-    const dataLY = [39212.67302, 18011.94, 7069.0, 16370.62, 32164.85, 22067.6, 5174.75, 0.0, 6189.0, 5559.0, 12715.0, 23974.0, 4690.0, 12642.0, 49831.52, 8274.18, 10028.95, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    const dataGL = [1965.93, 7639.05, 16551.0, 18694.04, 16873.42, 10337.01, 48919.0, 0.0, 37528.0, 74532.0, 3435.0, 29564.0, 45742.0, 275190.0, 80938.47, 79314.84, 40263.29, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    const dataLY = [39212.67302, 18011.94, 7069.0, 16370.62, 32164.85, 22067.6, 5174.75, 0.0, 6189.0, 5559.0, 12715.0, 23974.0, 4690.0, 12642.0, 49831.52, 8274.18, 10028.95, 19145.79, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    const dataGL = [1965.93, 7639.05, 16551.0, 18694.04, 16873.42, 10337.01, 48919.0, 0.0, 37528.0, 74532.0, 3435.0, 29564.0, 45742.0, 275190.0, 80938.47, 79314.84, 40263.29, 14617.11, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     const dataFY = [191515.796095769, 194768.047195686, 198191.0081396, 201520.117285306, 204696.822437083, 208362.614191064, 211716.285151739, 216421.091488444, 220346.184476818, 223607.932953023, 228547.407547143, 232815.929682439, 237375.5279245, 236081.772230256, 238853.134920526, 245308.625053514, 252122.753527222, 259326.260770857, 266953.503734706, 275043.003847879, 283638.097718125, 292787.713773548, 302547.304232667, 312979.969895862, 324157.825963571, 336163.67136963, 349093.043345385, 363056.7650792, 378184.130290833, 394626.918564348, 412564.505771818, 432210.434618095, 453820.956349, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    const projectNames = ["260085-780B Auto Spray", "260050-Click Rim方向盘热压包覆", "250379-长滑轨自动装配线", "260109-DAB自动包覆&EPW展示", "250383-F2N DAB门盖包覆胎模", "250262-W530 IP CUN  welding tool", "250188-MX11-9门盖包覆胎模A", "250362-MX增量灯头线", "260115-X90DP双组分喷胶设备 第二台", "240231-L234 RHD Top Skin Pre-Fix tooling", "260116-X90DP双组分喷胶设备 第一台", "260082-F2N灯头模组自动装配线", "240255-灯头线一期装配检测线", "250301-小米昆仑自动线", "260053-V530 地图袋包边模具后门"];
-    const projectValues = [19779.33871121, 3718.306, 2734.05538434, 2148.25, 1928.14, 1627.535868, 1387.597219, 569.0, 425.06778033, 387.7109877, 367.18233106, 309.02, 309.02, 309.02, 271.2];
-    const isolatorNames = ["报废", "王一飞", "陈洁", "齐永安", "张俣健", "陈帅", "徐义星", "程德宝", "陈佳荣", "陈雨杭", "樊皆杰", "郝秀霞", "郭新杰", "高一恒", "刘东林"];
-    const isolatorValues = [10111.61848664, 9890.222419499998, 3876.5551878, 3718.306, 2148.25, 1928.14, 1808.8311999999999, 733.13, 618.04, 387.7109877, 328.5, 309.02, 272.47999999999996, 243.79, 227.0];
-    const returnNames = [];
-    const returnValues = [];
+    const projectNames = ["260065-P708 upper wrapping tool", "250383-F2N DAB门盖包覆胎模", "260109-DAB自动包覆&EPW展示", "260127-E2LB-2 IP小件热压胎模", "240283-赛力斯 F3 CNSL F3 1800包边机", "260130-四转台锡焊设备", "250157-F1L 遮阳板5合1装配线", "260129-金桥E2LB-2-IP自动挂架", "260050-Click Rim方向盘热压包覆", "260053-V530 地图袋包边模具后门", "260031-F05&F03 DP产品共用-上料机构+移栽抓手及胎具", "260116-X90DP双组分喷胶设备 第一台", "260115-X90DP双组分喷胶设备 第二台", "250372-北京V530 焊接模具OP2&换模车", "260101-合肥辊胶设备+防错"];
+    const projectValues = [34560.83, 4924.9849097999995, 4024.84817, 3123.853979, 2406.08, 1582.12, 1151.1999999999998, 816.5, 562.9, 424.78, 252.31, 128.0, 128.0, 105.84, 65.7];
+    const isolatorNames = ["金宇隆", "报废", "陈帅", "陆怡沩", "陆定豪", "樊爱强", "韦少官", "潘翼伟", "王晓宇", "周华盛", "王俊聪", "陈冉", "齐永安", "陆昱", "黄蒙"];
+    const isolatorValues = [34560.83, 5558.007058800001, 4733.17, 4525.396, 2406.08, 1782.51, 1582.12, 1151.1999999999998, 816.5, 562.9, 424.78, 256.0, 252.31, 105.84, 80.0];
+    const returnNames = ["240071-VW426 DP welding machine"];
+    const returnValues = [2406.08];
 
     new Chart(document.getElementById('mainChart'), {
         type:'bar', data:{ labels:weekData, datasets:[
@@ -65,9 +138,9 @@
         ] },
         options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{ stacked:true, title:{ display:true, text:'周数' }, ticks:{ maxRotation:90, minRotation:45, autoSkip:false } }, y:{ beginAtZero:true, title:{ display:true, text:'金额 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } }, plugins:{ tooltip:{ callbacks:{ label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toLocaleString() } } } }
     });
-    new Chart(document.getElementById('barChartProject'), { type:'bar', data:{ labels:projectNames, datasets:[{ label:'领用总价', data:projectValues, backgroundColor:'#156082' }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'领用总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
-    new Chart(document.getElementById('barChartIsolator'), { type:'bar', data:{ labels:isolatorNames, datasets:[{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082' }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'隔离总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
-    new Chart(document.getElementById('barChartReturn'), { type:'bar', data:{ labels:returnNames, datasets:[{ label:'退库总价', data:returnValues, backgroundColor:'#156082' }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'退库总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
+    new Chart(document.getElementById('barChartProject'), { type:'bar', data:{ labels:projectNames, datasets:[{ label:'领用总价', data:projectValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'领用总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
+    new Chart(document.getElementById('barChartIsolator'), { type:'bar', data:{ labels:isolatorNames, datasets:[{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'隔离总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
+    new Chart(document.getElementById('barChartReturn'), { type:'bar', data:{ labels:returnNames, datasets:[{ label:'退库总价', data:returnValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }] }, options:{ indexAxis:'y', responsive:true, scales:{ x:{ title:{ display:true, text:'退库总价 (元)' }, ticks:{ callback:v=>v.toLocaleString() } } } } });
 </script>
 </body>
 </html>
