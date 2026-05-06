@@ -208,12 +208,13 @@ professional_html = f"""<!DOCTYPE html>
         }}
         @media print {{
             .container {{
-                width: 100%;
+                width: auto !important;
                 max-width: none;
                 margin: 0;
             }}
             canvas {{
-                width: 100% !important;
+                width: 1200px !important;
+                height: auto !important;
                 max-width: none;
             }}
         }}
@@ -278,13 +279,13 @@ professional_html = f"""<!DOCTYPE html>
         <div class="legend-item"><div class="legend-color color-gl"></div><span>隔离 (柱形图-上)</span></div>
         <div class="legend-item"><div class="legend-color color-fy"></div><span>每周需复用 (线型图)</span></div>
     </div>
-    <div class="chart-container"><canvas id="mainChart"></canvas></div>
+    <div class="chart-container"><canvas id="mainChart" width="1200" height="560" style="width:1200px;height:560px"></canvas></div>
     <h2>📊 项目 - 库存领用</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartProject"></canvas></div>
+    <div class="horizontal-chart-container"><canvas id="barChartProject" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
     <h2>👤 隔离人 - 库存隔离</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartIsolator"></canvas></div>
+    <div class="horizontal-chart-container"><canvas id="barChartIsolator" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
     <h2>📦 项目 - 退库</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartReturn"></canvas></div>
+    <div class="horizontal-chart-container"><canvas id="barChartReturn" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
     <div class="data-info">
         <h3>图表说明</h3>
         <ul><li>区域图 (绿色)：2025年每周金额趋势</li><li>柱形图 (蓝色+橙色)：领用（下）+ 隔离（上）</li><li>线型图 (蓝色)：每周需复用金额</li><li>横向条形图：项目领用、隔离人隔离、项目退库 TOP15</li></ul>
@@ -311,11 +312,11 @@ professional_html = f"""<!DOCTYPE html>
             {{ type:'bar', label:'隔离', data:dataGL, backgroundColor:'#F26E29', stack:'stack0', order:2 }},
             {{ type:'line', label:'每周需复用', data:dataFY, borderColor:'#0F9ED5', borderWidth:3, pointBackgroundColor:'#0F9ED5', pointBorderColor:'#fff', pointRadius:4, fill:false, tension:0.2, order:1 }}
         ] }},
-        options:{{ responsive:true, maintainAspectRatio:false, scales:{{ x:{{ stacked:true, title:{{ display:true, text:'周数' }}, ticks:{{ maxRotation:90, minRotation:45, autoSkip:false }} }}, y:{{ beginAtZero:true, title:{{ display:true, text:'金额 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }}, plugins:{{ tooltip:{{ callbacks:{{ label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toLocaleString() }} }} }} }}
+        options:{{ responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ stacked:true, title:{{ display:true, text:'周数' }}, ticks:{{ maxRotation:90, minRotation:45, autoSkip:false }} }}, y:{{ beginAtZero:true, title:{{ display:true, text:'金额 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }}, plugins:{{ tooltip:{{ callbacks:{{ label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toLocaleString() }} }} }} }}
     }});
-    new Chart(document.getElementById('barChartProject'), {{ type:'bar', data:{{ labels:projectNames, datasets:[{{ label:'领用总价', data:projectValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'领用总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
-    new Chart(document.getElementById('barChartIsolator'), {{ type:'bar', data:{{ labels:isolatorNames, datasets:[{{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'隔离总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
-    new Chart(document.getElementById('barChartReturn'), {{ type:'bar', data:{{ labels:returnNames, datasets:[{{ label:'退库总价', data:returnValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:true, scales:{{ x:{{ title:{{ display:true, text:'退库总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartProject'), {{ type:'bar', data:{{ labels:projectNames, datasets:[{{ label:'领用总价', data:projectValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'领用总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartIsolator'), {{ type:'bar', data:{{ labels:isolatorNames, datasets:[{{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'隔离总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartReturn'), {{ type:'bar', data:{{ labels:returnNames, datasets:[{{ label:'退库总价', data:returnValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'退库总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
 </script>
 </body>
 </html>"""
@@ -344,6 +345,8 @@ def html_to_pdf(html_path, pdf_path):
     cmd = [
         browser_exe, "--headless", "--disable-gpu",
         "--landscape",
+        "--window-size=1366,768",
+        "--force-device-scale-factor=1",
         "--virtual-time-budget=15000",
         f"--print-to-pdf={pdf_path}",
         html_path
@@ -382,22 +385,25 @@ html_path = professional_html_file
 pdf_path = html_path.replace('.html', '.pdf')
 html_to_pdf(html_path, pdf_path)
 
-# ================== 发送邮件（专业图表HTML作为附件） ==================
+# ================== 发送邮件（专业图表PDF作为附件） ==================
 print("\n正在打开 Outlook 邮件窗口...")
-html_file_attach = professional_html_file
+attachment_file = pdf_path
 try:
     import win32com.client as win32
     outlook = win32.Dispatch("Outlook.Application")
     mail = outlook.CreateItem(0)
     mail.To = "liang.cao@yanfeng.com"
     mail.Subject = "库存统计报告 - 专业图表"
-    mail.Body = "请查收附件中的库存统计图表 HTML 文件。"
-    mail.Attachments.Add(html_file_attach)
+    mail.HTMLBody = (
+        "请查收附件中的库存统计图表 PDF 文件。<br><br>"
+        "<a href=\"https://shidingtech.cn/yanfeng/%E5%BA%93%E5%AD%98%E6%95%B0%E6%8D%AE/%E4%B8%93%E4%B8%9A%E5%BA%93%E5%AD%98%E5%9B%BE%E8%A1%A8.html\">点击此处</a>，查看网页版图表"
+    )
+    mail.Attachments.Add(attachment_file)
     mail.Display()
     print("Outlook 邮件窗口已打开，请确认收件人和附件后点击发送。")
 except ImportError:
     print("未安装 pywin32 库，请执行：pip install pywin32")
-    print(f"请手动发送邮件，附件位置：{html_file_attach}")
+    print(f"请手动发送邮件，附件位置：{attachment_file}")
 except Exception as e:
     print(f"打开 Outlook 失败：{e}")
-    print(f"请手动发送邮件，附件位置：{html_file_attach}")
+    print(f"请手动发送邮件，附件位置：{attachment_file}")
