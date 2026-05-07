@@ -295,6 +295,29 @@ class PKRDataCrawler:
                 pass
             raise
 
+    def wait_for_project_list_download(self, existing_files=None, timeout=120, poll_interval=2):
+        """等待最新Project_List下载完成并返回文件路径"""
+        if existing_files is None:
+            existing_files = set()
+        pattern = os.path.join(self.download_dir, "Project_List*.xls*")
+        end_time = time.time() + timeout
+        last_size = {}
+        while time.time() < end_time:
+            all_files = [f for f in glob.glob(pattern) if not f.lower().endswith('.crdownload') and not f.lower().endswith('.part')]
+            new_files = [f for f in all_files if f not in existing_files]
+            if new_files:
+                latest_file = max(new_files, key=os.path.getmtime)
+                try:
+                    size = os.path.getsize(latest_file)
+                except OSError:
+                    size = -1
+                previous = last_size.get(latest_file)
+                if previous == size and size > 0:
+                    return latest_file
+                last_size[latest_file] = size
+            time.sleep(poll_interval)
+        raise TimeoutError(f"等待Project_List下载完成超时: {pattern}")
+
     def download_xso_data(self):
         """下载XSO数据"""
         try:
@@ -329,13 +352,17 @@ class PKRDataCrawler:
             # 等待搜索结果加载
             time.sleep(PAGE_LOAD_WAIT_TIME)
 
+            # 记录当前已有Project_List文件，避免误判旧文件
+            existing_files = set(glob.glob(os.path.join(self.download_dir, "Project_List*.xls*")))
+
             # 点击导出按钮（实际上是span元素）
             export_button = self.driver.find_element(By.CSS_SELECTOR, "span[onclick='exportData()']")
             export_button.click()
             print("已点击导出按钮")
 
-            # 等待下载完成
-            time.sleep(DOWNLOAD_WAIT_TIME)
+            # 等待下载文件出现并完成
+            download_file = self.wait_for_project_list_download(existing_files=existing_files, timeout=180)
+            print(f"下载完成: {download_file}")
 
             # 切换回默认内容
             self.driver.switch_to.default_content()

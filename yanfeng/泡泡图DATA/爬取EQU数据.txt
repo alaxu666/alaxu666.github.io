@@ -1,0 +1,23 @@
+AI提示词：
+用python写出下面功能的代码：
+1，打开D:\工作\产品安全\SSO\pythonProject路径下的“当月出图项目.xlsx”，用pandas保存数据为df1。
+2，打开https://ebp.yanfeng.com/login
+3，找到formcontrolname="account"的input，输入“uxuxs004”；找到formcontrolname="password"的input，输入“2044o2o5-7”；然后按回车登陆。跳转后的页面中出现显示文本是“EBP Program”的span后，表示登陆成功。
+4，点击显示文本是“EBP Program”的span，然后点击显示文本是“My Program List”的span。
+5，这时不要关闭网页，对df1中所有“Project Name Part”字段的数据进行循环扫描，循环提内功能如下：
+5.1，点击显示文本是“My Program List”的span。
+5.2，用正则表达式提取当前循环的“Project Name Part”数据第一个“,”左侧的所有字符，包括中文、字母、数字，去除两侧的空格、制表符的无效字符，将处理后的本文赋值给变量OEM。
+5.3，回到网页，找到col-id="display_name_filter"的div标签体中，点击data-ref="eFilterButton"的span，等待最近激活的 input 出现，然后在input文本框中输入变量OEM中的数据。
+5.4，找到class="ag-body-viewport ag-layout-normal ag-row-animation"的div，在这个div体中，提取所有span标签中显示文本，并依次保存到名为df_OEMprojects的pandas框架中，名为“项目全名”的字段中。同时用正则表达式，提取这段文本第三个“,”和第四个“,”之间的文本，保存到df_OEMprojects的“车型代号零部件名”字段中，提取这段文本第四个“,”和第五个“,”之间的文本，保存到df_OEMprojects的“加工设备”字段中。
+5.5，提取当前循环的“Project Name Part”字段的数据中，第一个“,”和第二个“,”之间的文本（去除文本前后空格、制表符、“,”），并和所有df_OEMprojects中“车型代号零部件名”字段的数据进行对比，根据文本相似度，给出车型相似度分值，并填入df_OEMprojects的“车型相似度”字段中。如果最高的相似度有多个相同数据，则提取这些相同的数据中“Project Name Part”字段第二个“,”和第三个“,”之间的文本（去除文本前后空格、制表符、“,”），并和所有df_OEMprojects中“加工设备”字段的数据进行对比，根据文本相似度，给出分值，并填入df_OEMprojects的“设备相似度”字段中。完成所有对比并得出相似度得分后，找出车型相似度最高的那组数据，如果有多个相同的最高相同的车型相似度数据，则再从这些数据中选出设备相似度最高的那组数据。提取这组数据的“项目全名”，并保存到ProjectName变量中。
+5.6，回到网页，找到显示文本是ProjectName变量中的文本数据相同的span标签，并点击。
+5.7，找到并点击显示文本是“ Budget ”的<a>标签。
+5.8，找到显示文本是“EQU Total:”的div，并提取层级相同的，class="flex-1"的div中显示的文本。把这个文本保存到当前大循环中“Project Name Part”对应的df1框架中，名为“Formal EQU”的字段名下数据中。
+5.9，把ProjectName变量保存到当前大循环中“Project Name Part”对应的df1框架中，名为“Detailed_ver_crosstab_name”的字段名下数据中。
+5.10，结束循环。
+6，把处理后的df1表格，覆盖D:\工作\产品安全\SSO\pythonProject路径下的“当月出图项目.xlsx”。
+
+class="ant-btn px-1 ant-btn-link ng-star-inserted"
+
+分页设置，失败，原本放在第4步后面：
+找到data-ref="pageSizeComp"的span，并在span体中，找到并点击显示文本是“20”的div，等待最近激活的下拉框中，选择点击“100”文本的那个选项。

@@ -1,0 +1,38 @@
+在泡泡图数据统计.py中，实现以下功能：
+程序开始时，需要输入需要统计的月份，比如输入2605表示统计2026年5月份的数据。把输入的数据通过这个格式转换成日期类型，保存在Month变量中。
+提取“PKR数据爬取.py”中，从打开页面：https://plmcnprdawc.yanfeng.com:3000/#/showHome开始，到点击onclick="exportData()"的button，完成下载Project_List的所有代码。
+完成下载Project_List后，关闭浏览器，用pandas导入C:\Users\uxuxs004\Downloads目录下，最新下载的Project_List开头的xls文档，Project_List因重名，可能会有很多带编号后缀的Project_List，查找并打开最新修改日期的。
+筛选出Project_List中“Phase 3 Gate Exit-FPR”列所有日期在Month月份中的所有数据，并把这些数据保存到dfPhase3的frame中。
+提取“泡泡图数据统计.py”所在路径下“泡泡图DATA\泡泡图当月数据.xlsx”的所有数据，把这些数据保存到dfPPT的frame中。
+提取“泡泡图数据统计.py”所在路径下“泡泡图DATA\泡泡图历史数据.xlsx”的所有数据，把这些数据保存到dfLS的frame中。
+把dfPPT的“Project ID”与dfPhase3中的“Project ID”进行对比，删除dfPPT中“Project ID”不存在于dfPhase3中的“Project ID”的那些数据，并把dfPhase3中“Project ID”不存在于dfPPT中“Project ID”的所有数据的“Project ID”，“Project Name”，“EBP Leader”，“Product Engineer”，“Phase 3 Gate Exit-FPR”列数据，复制到dfPPT中的“Project ID”，“Project Name”，“EBP Leader”，“Product Engineer”，“Phase 3 Gate Exit-FPR”列中。
+查找dfPPT中，“Project ID”存在于dfLS表格中的数据，并把dfLS中“Design_release”、“Project Name Part”、“score”、“score”、“Formal EQU”、“Detailed_ver_crosstab_ID”的数据，复制到dfPPT对应的列中。
+遍历dfPPT中“Project Name Part”列数据为空的数据，提取这些数据对应“Project Name”列中的字符串第二个“,”之后，到倒数第三个“,”之前的文本（不包括这两个“,”），把提取后的文本，保存到这些数据对应的“Project Name Part”列中。
+把所有dfPPT中“score”列数据为空的数据，填充“100”。
+遍历所有dfPPT中的数据，如果dfPPT中“Phase 3 Gate Exit-FPR”和“Design_release”都有日期，则计算两个日期间相隔多少周，用如果“Design_release”早于“Phase 3 Gate Exit-FPR”，则周数为负值。把计算后的周数（带正负符号），填入对应的“Max weeks after gate”中。
+
+
+
+如果“Formal EQU”的数据存在空值，则执行以下程序：
+1，启动Edge浏览器。
+2，在Edge浏览器中，打开https://ebp.yanfeng.com/login
+3，找到formcontrolname="account"的input，输入“uxuxs004”；找到formcontrolname="password"的input，输入“2045O2O5-7”；要定位并点击<span class="ng-star-inserted"> Login </span>登陆。跳转后的页面中出现显示文本是“EBP Program”的span后，表示登陆成功。
+4，点击显示文本是“EBP Program”的span，然后点击显示文本是“My Program List”的span。
+5，这时不要关闭网页，找到dfPPT中“Formal EQU”为空的数据，并对这些数据中“Project Name Part”字段的数据进行循环遍历，循环体内功能如下：
+5.1，点击显示文本是“My Program List”的span。
+5.2，用正则表达式提取当前循环的“Project Name Part”数据第一个“,”左侧的所有字符，包括中文、字母、数字，去除两侧的空格、制表符的无效字符，将处理后的本文赋值给变量OEM。
+5.3，回到网页，找到col-id="display_name_filter"的div标签体中，点击data-ref="eFilterButton"的span，等待最近激活的 input 出现，然后在input文本框中输入变量OEM中的数据。
+5.4，找到class="ag-body-viewport ag-layout-normal ag-row-animation"的div，在这个div体中，提取所有span标签中显示文本，并依次保存到名为df_OEMprojects的pandas框架中，名为“项目全名”的字段中。同时用正则表达式，提取这段文本第三个“,”和第四个“,”之间的文本，保存到df_OEMprojects的“车型代号零部件名”字段中，提取这段文本第四个“,”和第五个“,”之间的文本，保存到df_OEMprojects的“加工设备”字段中。
+5.5，提取当前循环的“Project Name Part”字段的数据中，第一个“,”和第二个“,”之间的文本（去除文本前后空格、制表符、“,”），并和所有df_OEMprojects中“车型代号零部件名”字段的数据进行对比，根据文本相似度，给出车型相似度分值，并填入df_OEMprojects的“车型相似度”字段中。如果最高的相似度有多个相同数据，则提取这些相同的数据中“Project Name Part”字段第二个“,”和第三个“,”之间的文本（去除文本前后空格、制表符、“,”），并和所有df_OEMprojects中“加工设备”字段的数据进行对比，根据文本相似度，给出分值，并填入df_OEMprojects的“设备相似度”字段中。完成所有对比并得出相似度得分后，找出车型相似度最高的那组数据，如果有多个相同的最高相同的车型相似度数据，则再从这些数据中选出设备相似度最高的那组数据。提取这组数据的“项目全名”，并保存到ProjectName变量中。
+5.6，回到网页，找到显示文本是ProjectName变量中的文本数据相同的span标签，并点击。
+5.7，找到并点击显示文本是“ Budget ”的<a>标签。
+5.8，找到显示文本是“EQU Total:”的div，并提取层级相同的，class="flex-1"的div中显示的文本。把这个文本保存到当前大循环中“Project Name Part”对应的dfPPT框架中，名为“Formal EQU”的字段名下数据中。
+5.9，把ProjectName变量保存到当前大循环中“Project Name Part”对应的dfPPT框架中，名为“Detailed_ver_crosstab_name”的字段名下数据中。
+5.10，结束循环。
+无论“Formal EQU”的数据是否是空值，都要执行下面程序：
+
+把dfPPT中全部数据，复制到dfLS中，如果dfLS中有相同“Project ID”的数据，则替换掉dfLS中的数据。
+把处理后的dfLS表格导出并覆盖原“泡泡图历史数据.xlsx”
+最后把处理后的dfPPT表格，导出并覆盖原“泡泡图当月数据.xlsx”。
+
+

@@ -39,6 +39,22 @@ OUTPUT_COLUMNS = [
 # 如果SMTP失败，系统会自动回退到打开邮件客户端手动发送
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
-SENDER_EMAIL = "uxuxs004@yanfeng.com"
-SENDER_PASSWORD = "ABCabc%123"
+SENDER_EMAIL = "shirong.xu@yanfeng.com"
+SENDER_PASSWORD = "2045O2O5-7"
 RECIPIENT_EMAIL = "shirong.xu@yanfeng.com"
+
+PKR_LOGIN_URL = 'https://plmcnprdawc.yanfeng.com:3000/#/showHome'
+
+PKR_USERNAME = 'uxuxs004'
+
+PKR_PASSWORD = 'ABCabc%123'
+
+EBP_LOGIN_URL = 'https://ebp.yanfeng.com/login'
+EBP_USERNAME = 'uxuxs004'
+EBP_PASSWORD = '2045O2O5-7'
+
+EBP_LOGIN_URL = 'https://ebp.yanfeng.com/login'
+
+EBP_USERNAME = 'uxuxs004'
+
+EBP_PASSWORD = '2045O2O5-7'

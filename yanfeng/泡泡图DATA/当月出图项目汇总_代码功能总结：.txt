@@ -1,0 +1,46 @@
+代码功能总结：
+1.	数据筛选与导出：
+o	从project.xlsx筛选当月出图项目（根据Phase 3 Gate Exit-FPR日期）
+o	排除备注为"取消"、"暂停"或"终止"的项目
+o	导出到当月出图项目.xlsx
+2.	数据处理：
+o	从Project Name中提取特定部分（第二个逗号和6位数字之间的内容）
+o	从Project Name中提取车型代码（第三个和第四个逗号之间的字母数字部分）
+o	计算Gate Exit日期和R	elease日期之间的ISO周数差
+3.	数据更新：
+o	更新project.xlsx中的PKR_S值（从当月出图项目文件获取）
+4.	外部数据整合：
+o	查找并读取最新的Detailed_ver_crosstab文件（支持xlsx和csv格式）
+o	自动处理UTF-16 LE BOM等编码问题
+o	根据车型代码匹配并获取最大Formal EQU值
+o	将空值Formal EQU设为0
+5.	列调整与新增：
+o	在"Max weeks after gate"列左侧新增"score"列
+o	调整"Project Name Part"列位置到"Design_release"和"score"列之间
+6.	日志与错误处理：
+o	详细记录处理过程
+o	提供清晰的错误提示和解决建议
+o	打印所有提取的车型代码
+7.	Excel格式设置：
+o	设置各列宽度
+o	确保日期格式正确
+最终输出的Excel文件列顺序为：
+1.	Project ID
+2.	Project Name
+3.	EBP Leader
+4.	Product Engineer
+5.	Phase 3 Gate Exit-FPR
+6.	Design_release
+7.	Project Name Part
+8.	score
+9.	Max weeks after gate
+10.	Formal EQU
+
+Clean the air filter of the vacuum pump
+Clean the filter screen of temperature control unit
+
+
+aCd34{}?/)(-+kdl123][|*&^%$#@!luOiK<>~`""""
+
+"20250918"转换日期格式"2025/11/9"
+=LEFT(F39,4)&"-"&MID(F39,5,2)&"-"&RIGHT(F39,2)
