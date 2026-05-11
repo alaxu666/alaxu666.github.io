@@ -133,7 +133,7 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
     if os.path.exists(config_path):
         with open(config_path, encoding="utf-8") as cf:
             config_text = cf.read()
-        match = re.search(r'DOWNLOAD_DIR\s*=\s*r?"([^"]*)"', config_text)
+        match = re.search(r'DOWNLOAD_DIR\s*=\s*r?["\']([^"\']*)["\']', config_text)
         if match:
             download_dir = match.group(1)
         else:
@@ -182,8 +182,13 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
             task_no = str(row.get("任务书编号", "")).strip()
             if not task_no:
                 continue
-            if task_no not in task_map:
-                task_map[task_no] = extract_middle_text(row.get("Project Name", ""))
+            suffix = extract_middle_text(row.get("Project Name", ""))
+            if not suffix:
+                continue
+            # 如果已有映射且旧值为空，则更新；否则保持第一个有效映射
+            current = task_map.get(task_no, "")
+            if not current:
+                task_map[task_no] = suffix
 
         if task_map:
             def replace_project_name(value):
