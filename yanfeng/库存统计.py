@@ -214,13 +214,6 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
             dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
             if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
                 dfXM_ZJ["项目名"] = dfXM_ZJ["项目名"].astype(str).apply(replace_project_name)
-
-            # 调试输出：显示替换结果
-            print(f"Lq列表中的任务号: {Lq}")
-            print(f"task_map中的映射: {task_map}")
-            print(f"dfTK_ZJ替换后前5行项目名: {dfTK_ZJ['项目名'].head().tolist()}")
-            if not dfXM_ZJ.empty:
-                print(f"dfXM_ZJ替换后前5行项目名: {dfXM_ZJ['项目名'].head().tolist()}")
     else:
         if dfProject_List.empty:
             print("警告：dfProject_List 为空，无法执行任务书编号匹配")
