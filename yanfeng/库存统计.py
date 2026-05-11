@@ -384,6 +384,7 @@ professional_html = f"""<!DOCTYPE html>
             width: 1200px;
             height: 600px;
             margin: 30px auto;
+            page-break-inside: avoid;
         }}
         h2 {{
             margin-top: 40px;
@@ -391,6 +392,11 @@ professional_html = f"""<!DOCTYPE html>
             border-left: 5px solid #156082;
             padding-left: 15px;
             font-size: 20px;
+            page-break-after: avoid;
+        }}
+        .chart-section {{
+            page-break-inside: avoid;
+            break-inside: avoid;
         }}
         .data-info {{
             background: #f8f9fa;
@@ -411,12 +417,18 @@ professional_html = f"""<!DOCTYPE html>
         <div class="legend-item"><div class="legend-color color-fy"></div><span>每周需复用 (线型图)</span></div>
     </div>
     <div class="chart-container"><canvas id="mainChart" width="1200" height="560" style="width:1200px;height:560px"></canvas></div>
-    <h2>📊 项目 - 库存领用</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartProject" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
-    <h2>👤 隔离人 - 库存隔离</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartIsolator" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
-    <h2>📦 项目 - 退库</h2>
-    <div class="horizontal-chart-container"><canvas id="barChartReturn" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    <div class="chart-section">
+        <h2>📊 项目 - 库存领用</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartProject" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
+    <div class="chart-section">
+        <h2>👤 隔离人 - 库存隔离</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartIsolator" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
+    <div class="chart-section">
+        <h2>📦 项目 - 退库</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartReturn" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
     <div class="data-info">
         <h3>图表说明</h3>
         <ul><li>区域图 (绿色)：2025年每周金额趋势</li><li>柱形图 (蓝色+橙色)：领用（下）+ 隔离（上）</li><li>线型图 (蓝色)：每周需复用金额</li><li>横向条形图：项目领用、隔离人隔离、项目退库 TOP15</li></ul>
@@ -479,6 +491,8 @@ def html_to_pdf(html_path, pdf_path):
         "--window-size=1366,768",
         "--force-device-scale-factor=1",
         "--virtual-time-budget=15000",
+        "--no-margins",
+        "--print-to-pdf-no-header",
         f"--print-to-pdf={pdf_path}",
         html_path
     ]
