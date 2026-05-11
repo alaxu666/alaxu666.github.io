@@ -121,7 +121,8 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
         if pd.isna(value):
             return None
         s = str(value).strip()
-        m = re.match(r'^(\d{6})(?:-.*)?$', s)
+        # 匹配只有6位数字或6位数字+'-'的情况
+        m = re.match(r'^(\d{6})-?$', s)
         return m.group(1) if m else None
 
     Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code]
@@ -153,38 +154,28 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
                 print(f"读取 Project_List 文件失败：{e}")
         else:
             print(f"警告：在下载目录未找到 Project_List 文件：{download_dir}")
-    print(f"Lq extracted: {Lq[:20]}")
 
     if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
         def extract_task_number(project_name):
             if pd.isna(project_name):
                 return ""
-            text = str(project_name).strip()
+            text = str(project_name)
             parts = text.split(",", 4)
-            if len(parts) >= 5:
-                tail = parts[4]
-                match = re.search(r"(\d{6})", tail)
-                if match:
-                    return match.group(1)
-            # 备用解析：从整个字符串中提取第一个完整6位数字编号
-            match = re.search(r"(?:^|[,;\s-])(\d{6})(?:[,;\s-]|$)", text)
+            if len(parts) < 5:
+                return ""
+            tail = parts[4]
+            match = re.search(r"(\d{6})", tail)
             return match.group(1) if match else ""
 
         def extract_middle_text(project_name):
             if pd.isna(project_name):
                 return ""
-            text = str(project_name).strip()
-            parts = text.split(",")
-            if len(parts) >= 5:
-                return ",".join(parts[2:5]).strip()
-            # 备用解析：提取第2个逗号到第5个逗号之间的文本
-            commas = [m.start() for m in re.finditer(r",", text)]
-            if len(commas) >= 5:
-                return text[commas[1]+1:commas[4]].strip()
-            return ""
+            parts = str(project_name).split(",")
+            if len(parts) < 5:
+                return ""
+            return ",".join(parts[2:5]).strip()
 
         dfProject_List["任务书编号"] = dfProject_List["Project Name"].apply(extract_task_number).astype(str)
-        print(f"Project_List 任务书编号样例: {dfProject_List['任务书编号'].drop_duplicates().tolist()[:10]}")
 
         # 构建任务书编号到 Project Name 中间文本的映射
         task_map = {}
@@ -200,7 +191,6 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
             if not current:
                 task_map[task_no] = suffix
 
-        print(f"task_map sample: {dict(list(task_map.items())[:20])}")
         if task_map:
             def replace_project_name(value):
                 if pd.isna(value):
@@ -208,8 +198,9 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
                 code = extract_task_code(value)
                 if not code:
                     return value
-                suffix = task_map.get(code)
-                if suffix:
+                # 只有当任务号在Lq列表中且能在task_map中找到对应关系时才替换
+                if code in Lq and code in task_map:
+                    suffix = task_map[code]
                     return f"{code}-{suffix}"
                 return value
 
