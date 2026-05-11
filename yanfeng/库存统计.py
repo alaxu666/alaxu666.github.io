@@ -5,6 +5,7 @@ from datetime import datetime
 import subprocess
 import os
 import sys
+import glob
 
 # ================== 原有数据读取和处理（不变） ==================
 dfLY = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/库存统计.xlsx", sheet_name="本周领用报表")
@@ -112,6 +113,96 @@ if not dfXM_ZJ.empty:
 if not dfTK_ZJ.empty:
     mask_tk = dfTK_ZJ["项目名"].apply(starts_with_6_digits)
     dfTK_ZJ = dfTK_ZJ.loc[mask_tk]
+
+# 追加功能：从dfTK_ZJ中提取6位任务号到Lq，并用最新Project_List文件匹配后更新项目名
+Lq = []
+if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
+    def extract_task_code(value):
+        if pd.isna(value):
+            return None
+        s = str(value).strip()
+        m = re.match(r'^(\d{6})(?:-.*)?$', s)
+        return m.group(1) if m else None
+
+    Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+
+    # 读取 config.py 中的 DOWNLOAD_DIR
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "config.py")
+    download_dir = None
+    if os.path.exists(config_path):
+        with open(config_path, encoding="utf-8") as cf:
+            config_text = cf.read()
+        match = re.search(r'DOWNLOAD_DIR\s*=\s*r?"([^"]*)"', config_text)
+        if match:
+            download_dir = match.group(1)
+        else:
+            print("警告：未能从 config.py 中解析 DOWNLOAD_DIR")
+    else:
+        print(f"警告：未找到配置文件：{config_path}")
+
+    dfProject_List = pd.DataFrame()
+    if download_dir:
+        project_files = glob.glob(os.path.join(download_dir, "Project_List*.xls*"))
+        if project_files:
+            latest_file = max(project_files, key=os.path.getmtime)
+            try:
+                dfProject_List = pd.read_excel(latest_file)
+                print(f"已读取最新 Project_List 文件：{latest_file}")
+            except Exception as e:
+                print(f"读取 Project_List 文件失败：{e}")
+        else:
+            print(f"警告：在下载目录未找到 Project_List 文件：{download_dir}")
+
+    if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
+        def extract_task_number(project_name):
+            if pd.isna(project_name):
+                return ""
+            text = str(project_name)
+            parts = text.split(",", 4)
+            if len(parts) < 5:
+                return ""
+            tail = parts[4]
+            match = re.search(r"(\d{6})", tail)
+            return match.group(1) if match else ""
+
+        def extract_middle_text(project_name):
+            if pd.isna(project_name):
+                return ""
+            parts = str(project_name).split(",")
+            if len(parts) < 5:
+                return ""
+            return ",".join(parts[2:5]).strip()
+
+        dfProject_List["任务书编号"] = dfProject_List["Project Name"].apply(extract_task_number).astype(str)
+
+        # 构建任务书编号到 Project Name 中间文本的映射
+        task_map = {}
+        for _, row in dfProject_List.iterrows():
+            task_no = str(row.get("任务书编号", "")).strip()
+            if not task_no:
+                continue
+            if task_no not in task_map:
+                task_map[task_no] = extract_middle_text(row.get("Project Name", ""))
+
+        if task_map:
+            def replace_project_name(value):
+                if pd.isna(value):
+                    return value
+                code = extract_task_code(value)
+                if not code:
+                    return value
+                suffix = task_map.get(code)
+                if suffix:
+                    return f"{code}-{suffix}"
+                return value
+
+            dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+    else:
+        if dfProject_List.empty:
+            print("警告：dfProject_List 为空，无法执行任务书编号匹配")
+        else:
+            print("警告：Project_List 文件中缺少 'Project Name' 列，无法执行任务书编号匹配")
 
 # 排序
 if not dfXM_ZJ.empty and '领用总价' in dfXM_ZJ.columns:
