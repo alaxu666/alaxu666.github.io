@@ -75,14 +75,14 @@ for xmtk in lXMTK:
     new_row = pd.DataFrame({"项目名": [xmtk], "退库总价": [total_price]})
     dfTK_ZJ = pd.concat([dfTK_ZJ, new_row], ignore_index=True)
 
-# 读取花名册并排除部门为 PD、Manufacturing 和 Program Management 的记录
+# 读取花名册并保留部门为 Program Management、PD 和 Manufacturing 的记录
 script_dir = os.path.dirname(os.path.abspath(__file__))
 roster_path = os.path.join(script_dir, "DATA", "装备中心花名册.xlsx")
 if os.path.exists(roster_path):
     try:
         dfCY = pd.read_excel(roster_path, sheet_name="花名册")
         if "部门" in dfCY.columns:
-            dfCY = dfCY[~dfCY["部门"].isin(["PD", "Manufacturing", "Program Management"])].copy()
+            dfCY = dfCY[dfCY["部门"].isin(["Program Management", "PD", "Manufacturing"])].copy()
         else:
             print(f"警告：花名册中未找到 '部门' 列，保留原始 dfCY")
         if "姓名" not in dfCY.columns:
