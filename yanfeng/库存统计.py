@@ -431,3 +431,34 @@ except ImportError:
 except Exception as e:
     print(f"打开 Outlook 失败：{e}")
     print(f"请手动发送邮件，附件位置：{attachment_file}")
+
+# ================== 自动执行Git提交和推送 ==================
+try:
+    # 切换到仓库根目录
+    repo_root = "C:/XSR/githubPage"
+    os.chdir(repo_root)
+    print(f"切换到仓库目录: {repo_root}")
+
+    # 获取今天的日期
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    commit_message = f"{today_date}更新"
+
+    # 执行Git命令
+    commands = [
+        ["git", "add", "."],
+        ["git", "commit", "-m", commit_message],
+        ["git", "push", "origin", "main"]
+    ]
+
+    for cmd in commands:
+        print(f"执行命令: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        if result.returncode == 0:
+            print(f"成功: {result.stdout.strip()}")
+        else:
+            print(f"失败: {result.stderr.strip()}")
+
+    print("Git操作完成")
+
+except Exception as e:
+    print(f"Git操作失败: {e}")
