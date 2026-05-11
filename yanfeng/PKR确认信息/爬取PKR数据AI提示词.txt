@@ -63,6 +63,8 @@ confirm信息的提取补充：
 把所有“PKR信息”列中，除了Total以外，其他PKRname，去重后，通过“姓1,名1@yanfeng.com,姓2,名2@yanfeng.com,...”的格式，组合在一起，并放在df1的第1行数据的“未完成人名”。
 把所有“PKR信息”列中，除了Total以外，其他PKRname，去重后，通过“姓1,名1,姓2,名2,...”的格式，组合在一起，并放在df1的第2行数据的“未完成人名”。
 把所有“PKR信息”列中，除了Total以外，其他PKRname，去重后，通过“姓1,名1”的格式，放在df1的第3行数据的“未完成人名”，通过“姓2,名2”的格式，放在df1的第4行数据的“未完成人名”，以此类推，通过“姓n,名n”的格式，放在df1的第n+2行数据的“未完成人名”。
+发邮件前，对于“是否确认”列中，不是“完成确认”的数据，收集这些数据行中，所有“未完成PKR信息”列中的所有PKRname（比如PKRname是“Xu Shirong”，则姓是“Xu”，名是“Shirong”;PKRname中如果存在“Wang Hao23”，则先把它替换为“Wang23 Hao”），对PKRname去重，假设去重后有n个PKRname，通过“名1.姓1@yanfeng.com; 名2.姓3@yanfeng.com; ...名n.姓n@yanfeng.com”的格式组成字符串，在第一行数据中的“未完成人名”列中，填入这个字符串。
+
 
 shirong,xu@yanfeng.com,kailiang,zhao@yanfeng.com
 
@@ -81,7 +83,8 @@ shirong,xu@yanfeng.com,kailiang,zhao@yanfeng.com
 找到aria-describedby="grid-table_real_pm_name"的<td>标签，提取标签中的title属性值，并保存到EBP Leader中。
 循环体结束。
 保留df1中的下面这些列数据，其余的列全部删除：Project ID，Project Name，OEM Name，EBP Leader，Product Engineer，SMTE，Project State，Phase 1 Gate Exit-GO，Phase 2 Gate Exit-DVR，Phase 3 Gate Exit-FPR，Phase 4 Gate Exit-CPA，Phase 5 Gate Exit-PLR
-增加一列，名为“未完成PKR信息”，分析一下df1中“PKR信息”列数据，如果存在PKRscore=0（每一行","后面的数字），则把这一行数据（PKRname,PKRscore）添加到“未完成PKR信息”，如果一个“PKR信息”数据中，存在多行PKRscore=0，则将这些数据都放到“未完成PKR信息”，分多行显示。如果“PKR信息”数据中不存在PKRscore=0的情况，则在“未完成PKR信息”中填入“完成”
+增加一列，名为“未完成PKR信息”，分析一下df1中“PKR信息”列数据，如果存在PKRscore=0（每一行","后面的数字），则把这一行数据（PKRname,PKRscore）添加到“未完成PKR信息”，如果存在PKRscore≠100（每一行","后面的数字），则把这一行格式化后的数据数据（PKRname,PKRscore）添加到“未完成PKR信息”，如果一个“PKR信息”数据中，存在多行PKRscore≠100，则将这些数据都放到“未完成PKR信息”，分多行显示。如果“PKR信息”数据中全部的PKRscore都是100，则在“未完成PKR信息”中填入“完成”
+
 导出df1到“C:\Users\uxuxs004\OneDrive - Yanfeng\work\产品安全\SSO\pythonProject\”目录下，并命名为“PKR完成情况（近两周）”
 
 修改判定依据改为confirmed信息：
@@ -103,7 +106,7 @@ PKR数据爬取.py中，能不能在代码全部执行后，用当前登陆的te
 另外最后发送邮件的表格中，增加一列“未完成PKR信息”，三列顺序是“Project Name”，“当前状态”，“未完成PKR信息”。发送人框中输入“未完成人名”列中的第一行文本。抄送框中输入liang.cao@yanfeng.com。
 
 Lu.Gongchao@yanfeng.com,Zhao.Kailiang@yanfeng.com
-Gongchao.lu@yanfeng.com; Kailiang.Zhao@yanfeng.com; shirong.xu@yanfeng.com
+Gongchao.lu@yanfeng.com; Kailiang.Zhao@yanfeng.com; shirong.xu@yanfeng.com; hao.wang23@yanfeng.com
 
 
 
@@ -111,5 +114,15 @@ Gongchao.lu@yanfeng.com; Kailiang.Zhao@yanfeng.com; shirong.xu@yanfeng.com
 shirong.xu@yanfeng.com
 收件人不要输入shirong.xu@yanfeng.com，要输入“未完成人名”列中的第一行文本，比如Lu.Gongchao@yanfeng.com,Zhao.Kailiang@yanfeng.com。
 保持其他代码不变，在输出“未完成人名”的第一行数据后，查找数据中是否存在“Wang.Hao23”，如果有这个字符串，则把这段字符串替换为“hao.wang23“。
-另外“是否确认”列，如果“未完成PKR信息”显示“完成”，但“Confirmed”列PKRname后没有全部confirmed，则在“是否确认”列显示“未确认(cao liang)”；如果“未完成PKR信息”显示非“完成”，则不管“Confirmed”列显示什么，都在“是否确认”列显示“未递交(工程师)”。最后在邮件html表格中，最后增加一列“是否确认”。4列顺序是“Project Name”，“当前状态”，“未完成PKR信息”，“是否确认”。
+【另外“是否确认”列，如果“未完成PKR信息”显示“完成”，但“Confirmed”列PKRname后没有全部confirmed，则在“是否确认”列显示“未确认(cao liang)”；如果“未完成PKR信息”显示非“完成”，则不管“Confirmed”列显示什么，都在“是否确认”列显示“未递交(工程师)”。最后在邮件html表格中，最后增加一列“是否确认”。4列顺序是“Project Name”，“当前状态”，“未完成PKR信息”，“是否确认”。】被下面代替：
+如果“Confirmed”列数据中的每一行PKRname后的“,”后的文本，全部是“Confirmed”，则在这个数据对应的“是否确认”列填入“完成确认”。如果“Confirmed”列数据中的每一行PKRname后的“,”后的文本，全部是“Submitted”，则在这个数据对应的“是否确认”列填入“未确认(Cao liang)”。如果“Confirmed”列数据中的每一行PKRname后的“,”后的文本，只要有非“Confirmed”且非“Submitted”的数据存在，则在这个数据对应的“是否确认”列填入“未评分(工程师)”。
+
+
+
 邮件中不要显示文本表格了，我手动从浏览器中复制粘贴html表格。
+
+通过邮件发送的哪些数据。也就是“是否确认”列中，不是“完成确认”，且“当前状态”列不是“Phase 1 Gate Exit-GO”的数据进行导出覆盖“PKR未完成情况（近两周）.xlsx”
+把PKR未完成情况同步到飞书.py修改成一个可调取的模块，在PKR数据爬取运行到最后，自动调取PKR未完成情况同步到飞书.py中的函数，完成本地数据替换飞书数据。
+
+PKR信息列中的数据，把“Total”改为“最低打分：”，把PKRname和PKRscore中间的“,”替换为“的PKR打分：”，在每个PKRscore后面，增加“；”
+修改“PKR信息”列的格式后，“未完成PKR信息”列的输出发生了偏差，按照下面的要求，重新修改代码：等待df1中“PKR信息”列完成数据采集并格式化后，分析一下“PKR信息”列数据，如果存在PKRscore≠100（每一行","后面的数字），则把这一行格式化后的数据数据（PKRname,PKRscore）添加到“未完成PKR信息”，如果一个“PKR信息”数据中，存在多行PKRscore≠100，则将这些数据都放到“未完成PKR信息”，分多行显示。如果“PKR信息”数据中全部的PKRscore都是100，则在“未完成PKR信息”中填入“完成”

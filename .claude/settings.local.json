@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /d \"c:\\\\XSR\\\\githubPage\")",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe yanfeng/test.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe -c \"import pandas as pd; df = pd.read_excel\\('yanfeng/PKR确认信息/PKR完成情况（近两周）.xlsx'\\); print\\('Excel列名:'\\); [print\\(f'  {col}'\\) for col in df.columns]\")",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe -c ' *)",
+      "Bash(copy yanfeng\\\\test.py yanfeng\\\\\"PKR未完成情况同步到飞书.py\")",
+      "Bash(copy yanfeng\\\\test.py yanfeng\\\\PKR未完成情况同步到飞书.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_import.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_sync_integration.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_filter_logic.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_export_filter.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_pkr_format.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_dual_export.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_incomplete_pkr_logic.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_new_format.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_new_incomplete_logic.py)",
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_confirm_status.py)"
+    ]
+  }
+}

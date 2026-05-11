@@ -212,6 +212,9 @@ class PKRDataCrawler:
             login_button.click()
             print("已点击登录按钮")
 
+            # 等待页面跳转
+            time.sleep(PAGE_LOAD_WAIT_TIME * 2)
+
             # 验证登录成功
             print("正在验证登录状态...")
             self.wait.until(
@@ -806,15 +809,65 @@ class PKRDataCrawler:
                                 print(f"提取Confirmed信息时出错: {e}")
                                 continue
 
+                    # 格式化PKR信息
+                    formatted_pkr_info = ""
+                    if pkr_info and pkr_info.strip():
+                        lines = pkr_info.split('\n')
+                        formatted_lines = []
+                        for line in lines:
+                            if line.strip():
+                                parts = line.split(',', 1)  # 只分割第一个逗号
+                                if len(parts) == 2:
+                                    pkr_name, pkr_score = parts
+                                    # 替换格式
+                                    if pkr_name == "Total":
+                                        # Total改为"最低打分："，分号后加换行符
+                                        formatted_line = f"最低打分：{pkr_score}；\n"
+                                    else:
+                                        # 将PKRname和PKRscore之间的逗号替换为"的PKR打分："，分号后加换行符
+                                        formatted_line = f"{pkr_name}的PKR打分：{pkr_score}；\n"
+
+                                    formatted_lines.append(formatted_line)
+
+                        formatted_pkr_info = ''.join(formatted_lines)
+
                     # 保存结果到df1的当前行（使用重置后的idx）
-                    df1.at[idx, 'PKR信息'] = pkr_info
+                    df1.at[idx, 'PKR信息'] = formatted_pkr_info
                     df1.at[idx, 'Confirmed'] = confirmed_info
 
-                    # 判断是否确认状态
+                    # 判断是否确认状态（基于Confirmed列数据）
                     if confirmed_info and confirmed_info.strip():
-                        confirmed_lines = confirmed_info.split('\n')
-                        all_confirmed = all(line.endswith(',Confirmed') for line in confirmed_lines if line.strip())
-                        df1.at[idx, '是否确认'] = '完成确认' if all_confirmed else '未确认(cao liang)'
+                        confirmed_lines = [line.strip() for line in confirmed_info.split('\n') if line.strip()]
+
+                        if not confirmed_lines:
+                            df1.at[idx, '是否确认'] = ''
+                        else:
+                            # 分析每一行的状态
+                            all_confirmed = True
+                            all_submitted = True
+                            has_other = False
+
+                            for line in confirmed_lines:
+                                if ',' in line:
+                                    pkr_name, status = line.rsplit(',', 1)
+                                    status = status.strip()
+
+                                    if status != 'Confirmed':
+                                        all_confirmed = False
+                                    if status != 'Submitted':
+                                        all_submitted = False
+                                    if status not in ['Confirmed', 'Submitted']:
+                                        has_other = True
+
+                            # 根据分析结果设置确认状态
+                            if all_confirmed and not has_other:
+                                df1.at[idx, '是否确认'] = '完成确认'
+                            elif all_submitted and not has_other:
+                                df1.at[idx, '是否确认'] = '未确认(Cao liang)'
+                            elif has_other:
+                                df1.at[idx, '是否确认'] = '未评分(工程师)'
+                            else:
+                                df1.at[idx, '是否确认'] = '未确认(Cao liang)'  # 混合状态
                     else:
                         if pkr_info and pkr_info.strip():
                             df1.at[idx, '是否确认'] = '未递交(工程师)'
@@ -855,28 +908,51 @@ class PKRDataCrawler:
                     return "完成"
 
                 incomplete_pkr = []
-                lines = str(pkr_info).split('\n')
 
-                for line in lines:
+                # 解析格式化后的PKR信息
+                # 格式示例: "最低打分：100；\nWang Hao23的PKR打分：100；\nLu Dinghao的PKR打分：95；\n"
+                pkr_text = str(pkr_info).strip()
+
+                # 按换行符分割，然后处理每一行
+                pkr_lines = pkr_text.split('\n')
+                pkr_items = []
+                for line in pkr_lines:
                     line = line.strip()
-                    if not line:
+                    if line:
+                        pkr_items.append(line)
+
+                for item in pkr_items:
+                    item = item.strip()
+                    if not item:
                         continue
 
-                    # 解析PKRname,PKRscore格式
-                    if ',' in line:
-                        parts = line.rsplit(',', 1)  # 从右边分割，只分割一次
-                        if len(parts) == 2:
-                            pkr_name = parts[0].strip()
-                            try:
-                                pkr_score = int(parts[1].strip())
-                                if pkr_score == 0:
-                                    incomplete_pkr.append(line)
-                            except ValueError:
-                                # 如果分数不是数字，跳过
-                                continue
+                    # 跳过"最低打分"项，只处理具体的PKR人员
+                    if "最低打分：" in item:
+                        continue
+
+                    # 解析"PKRname的PKR打分：score"格式
+                    if "的PKR打分：" in item:
+                        try:
+                            # 分割PKR名称和分数
+                            name_part, score_part = item.split("的PKR打分：", 1)
+                            pkr_name = name_part.strip()
+                            pkr_score_str = score_part.strip()
+
+                            # 提取分数（应该是分号前的数字）
+                            pkr_score_str_clean = pkr_score_str.split('；')[0]  # 移除分号
+                            pkr_score = int(pkr_score_str_clean)
+
+                            # 如果分数≠100，则添加到未完成列表
+                            if pkr_score != 100:
+                                # 保持与PKR信息相同的格式
+                                incomplete_pkr.append(f"{pkr_name}的PKR打分：{pkr_score}；\n")
+                        except (ValueError, IndexError):
+                            # 如果解析失败，跳过此项
+                            continue
 
                 if incomplete_pkr:
-                    return '\n'.join(incomplete_pkr)
+                    # 使用与PKR信息相同的格式，每行后都有换行符
+                    return ''.join(incomplete_pkr).strip()
                 else:
                     return "完成"
 
@@ -1074,17 +1150,30 @@ class PKRDataCrawler:
             print("正在提取未完成人名...")
             incomplete_pkr_names = set()
 
+            # 只处理"是否确认"列中不是"完成确认"的数据
             for idx, row in df1.iterrows():
-                incomplete_pkr_info = row.get('未完成PKR信息', '')
-                if pd.notna(incomplete_pkr_info) and str(incomplete_pkr_info).strip() \
-                        and incomplete_pkr_info != "完成" and incomplete_pkr_info != "phase1不适用":
-                    lines = str(incomplete_pkr_info).split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        if line and ',' in line:
-                            pkr_name = line.split(',')[0].strip()
-                            if pkr_name != 'Total':
-                                incomplete_pkr_names.add(pkr_name)
+                confirm_status = row.get('是否确认', '')
+                if confirm_status != "完成确认":
+                    incomplete_pkr_info = row.get('未完成PKR信息', '')
+                    if pd.notna(incomplete_pkr_info) and str(incomplete_pkr_info).strip() \
+                            and incomplete_pkr_info != "完成" and incomplete_pkr_info != "phase1不适用":
+
+                        # 解析新的PKR信息格式
+                        # 格式示例: "Lu Dinghao的PKR打分：95；\nXu Shirong的PKR打分：90；"
+                        pkr_text = str(incomplete_pkr_info).strip()
+
+                        # 按换行符分割
+                        pkr_lines = pkr_text.split('\n')
+                        for line in pkr_lines:
+                            line = line.strip()
+                            if line and "的PKR打分：" in line:
+                                # 提取PKR名称
+                                pkr_name = line.split("的PKR打分：")[0].strip()
+                                if pkr_name and pkr_name != 'Total':
+                                    # 特殊处理：Wang Hao23 -> Wang23 Hao
+                                    if pkr_name == "Wang Hao23":
+                                        pkr_name = "Wang23 Hao"
+                                    incomplete_pkr_names.add(pkr_name)
 
             pkr_names_list = sorted(list(incomplete_pkr_names))
             if not pkr_names_list:
@@ -1093,19 +1182,33 @@ class PKRDataCrawler:
 
             print(f"从未完成PKR信息中找到{len(pkr_names_list)}个PKR名称: {', '.join(pkr_names_list)}")
 
-            # 生成邮箱格式（空格转点）
-            email_format = ','.join([f"{name.replace(' ', '.')}@yanfeng.com" for name in pkr_names_list])
+            # 生成邮箱格式：名.姓@yanfeng.com
+            email_addresses = []
+            for pkr_name in pkr_names_list:
+                # 分割姓和名
+                name_parts = pkr_name.split(' ')
+                if len(name_parts) >= 2:
+                    # 假设格式为"姓 名"，转换为"名.姓@yanfeng.com"
+                    last_name = name_parts[0]  # 姓
+                    first_name = name_parts[1]  # 名
+                    email = f"{first_name}.{last_name}@yanfeng.com"
+                    email_addresses.append(email)
+                else:
+                    # 如果无法分割，使用原格式
+                    email = f"{pkr_name.replace(' ', '.')}@yanfeng.com"
+                    email_addresses.append(email)
 
-            # 特殊替换（保留原逻辑）
-            if 'Wang.Hao23' in email_format:
-                email_format = email_format.replace('Wang.Hao23', 'Wang23.Hao')
-                print("已将 'Wang.Hao23' 替换为 'Wang23.Hao'")
-
+            # 按邮箱地址排序
+            email_addresses.sort()
+            email_format = '; '.join(email_addresses)
+            print(f"生成的邮箱格式: {email_format}")
             print("未完成人名提取和组合完成")
             return email_format
 
         except Exception as e:
             print(f"提取未完成人名过程中出现错误: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
 
     def export_final_data(self, df1):
@@ -1134,13 +1237,32 @@ class PKRDataCrawler:
             # 选择需要保留的列
             columns_to_keep = OUTPUT_COLUMNS + ['未完成PKR信息', '过门周', 'Confirmed', '是否确认', '未完成人名']
             existing_columns = [col for col in columns_to_keep if col in df1.columns]
-            final_df = df1[existing_columns].copy()
 
-            # 导出Excel
-            output_file = os.path.join(self.confirm_dir, "PKR完成情况（近两周）.xlsx")
-            final_df.to_excel(output_file, index=False)
-            print(f"数据已导出到: {output_file}")
-            print(f"共导出{len(final_df)}行数据")
+            # 1. 导出PKR完成情况（近两周）.xlsx - 所有数据
+            complete_df = df1[existing_columns].copy()
+            complete_file = os.path.join(self.confirm_dir, "PKR完成情况（近两周）.xlsx")
+            complete_df.to_excel(complete_file, index=False)
+            print(f"完整数据已导出到: {complete_file}")
+            print(f"共导出{len(complete_df)}行完整数据")
+
+            # 2. 筛选出未完成的PKR数据（与邮件发送的筛选条件一致）
+            # 条件："是否确认"列不是"完成确认"，且"当前状态"列不是"Phase 1 Gate Exit-GO"
+            incomplete_mask = (
+                (df1['是否确认'] != "完成确认") &
+                (df1['当前状态'] != 'Phase 1 Gate Exit-GO')
+            )
+            incomplete_df = df1[incomplete_mask].copy()
+            incomplete_final_df = incomplete_df[existing_columns].copy()
+
+            # 导出未完成数据
+            incomplete_file = os.path.join(self.confirm_dir, "PKR未完成情况（近两周）.xlsx")
+            incomplete_final_df.to_excel(incomplete_file, index=False)
+            print(f"未完成数据已导出到: {incomplete_file}")
+            print(f"共导出{len(incomplete_final_df)}行未完成数据")
+            print(f"筛选条件: 是否确认≠'完成确认' 且 当前状态≠'Phase 1 Gate Exit-GO'")
+
+            # 返回未完成文件的路径（用于后续同步到飞书）
+            output_file = incomplete_file
 
             # 导出历史未完成记录（如有）
             if len(historical_df) > 0:
@@ -1202,8 +1324,9 @@ class PKRDataCrawler:
                 raw_emails = str(df1.iloc[0].get('未完成人名', '')).strip()
 
                 if raw_emails:
-                    # 分割邮箱地址
-                    email_list = [email.strip() for email in raw_emails.split(',') if email.strip()]
+                    # 分割邮箱地址（支持逗号和分号分隔）
+                    import re
+                    email_list = [email.strip() for email in re.split(r'[;,]', raw_emails) if email.strip()]
                     formatted_emails = []
 
                     for email in email_list:
@@ -1421,6 +1544,25 @@ class PKRDataCrawler:
 
             # 导出最终数据
             output_file = self.export_final_data(df1)
+
+            # 自动同步到飞书表格
+            try:
+                print("\n开始同步数据到飞书表格...")
+                import sys
+                import os
+                # 确保导入路径正确
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                if current_dir not in sys.path:
+                    sys.path.insert(0, current_dir)
+
+                from PKR未完成情况同步到飞书 import sync_pkr_data_to_feishu
+                sync_pkr_data_to_feishu()
+                print("飞书表格同步完成！")
+            except Exception as e:
+                print(f"飞书同步失败: {e}")
+                import traceback
+                traceback.print_exc()
+                print("请手动运行 'PKR未完成情况同步到飞书.py' 进行同步")
 
             # 发送Teams消息提醒
             self.send_teams_message(df1)

@@ -2,11 +2,11 @@
 程序开始时，需要输入需要统计的月份，比如输入2605表示统计2026年5月份的数据。把输入的数据通过这个格式转换成日期类型，保存在Month变量中。
 提取“PKR数据爬取.py”中，从打开页面：https://plmcnprdawc.yanfeng.com:3000/#/showHome开始，到点击onclick="exportData()"的button，完成下载Project_List的所有代码。
 完成下载Project_List后，关闭浏览器，用pandas导入C:\Users\uxuxs004\Downloads目录下，最新下载的Project_List开头的xls文档，Project_List因重名，可能会有很多带编号后缀的Project_List，查找并打开最新修改日期的。
-筛选出Project_List中“Phase 3 Gate Exit-FPR”列所有日期在Month月份中的所有数据，并把这些数据保存到dfPhase3的frame中。
+筛选出Project_List中“Phase 3 Gate Exit-FPR”列所有日期在Month月份中，同时“Category”列为“S”的所有数据，并把这些数据保存到dfPhase3的frame中。
 提取“泡泡图数据统计.py”所在路径下“泡泡图DATA\泡泡图当月数据.xlsx”的所有数据，把这些数据保存到dfPPT的frame中。
 提取“泡泡图数据统计.py”所在路径下“泡泡图DATA\泡泡图历史数据.xlsx”的所有数据，把这些数据保存到dfLS的frame中。
 把dfPPT的“Project ID”与dfPhase3中的“Project ID”进行对比，删除dfPPT中“Project ID”不存在于dfPhase3中的“Project ID”的那些数据，并把dfPhase3中“Project ID”不存在于dfPPT中“Project ID”的所有数据的“Project ID”，“Project Name”，“EBP Leader”，“Product Engineer”，“Phase 3 Gate Exit-FPR”列数据，复制到dfPPT中的“Project ID”，“Project Name”，“EBP Leader”，“Product Engineer”，“Phase 3 Gate Exit-FPR”列中。
-查找dfPPT中，“Project ID”存在于dfLS表格中的数据，并把dfLS中“Design_release”、“Project Name Part”、“score”、“score”、“Formal EQU”、“Detailed_ver_crosstab_ID”的数据，复制到dfPPT对应的列中。
+查找dfPPT中，“Project ID”存在于dfLS表格中的数据，如果dfPPT中的“Design_release”、“Project Name Part”、“score”、“Formal EQU”、“Detailed_ver_crosstab_ID”数据是空值，则并把dfLS中“Design_release”、“Project Name Part”、“score”、“Formal EQU”、“Detailed_ver_crosstab_ID”的数据，复制到dfPPT对应的列中，如果dfPPT中的“Design_release”、“Project Name Part”、“score”、“Formal EQU”、“Detailed_ver_crosstab_ID”数据不是空值，则保留现有数据不变。
 遍历dfPPT中“Project Name Part”列数据为空的数据，提取这些数据对应“Project Name”列中的字符串第二个“,”之后，到倒数第三个“,”之前的文本（不包括这两个“,”），把提取后的文本，保存到这些数据对应的“Project Name Part”列中。
 把所有dfPPT中“score”列数据为空的数据，填充“100”。
 遍历所有dfPPT中的数据，如果dfPPT中“Phase 3 Gate Exit-FPR”和“Design_release”都有日期，则计算两个日期间相隔多少周，用如果“Design_release”早于“Phase 3 Gate Exit-FPR”，则周数为负值。把计算后的周数（带正负符号），填入对应的“Max weeks after gate”中。
@@ -35,4 +35,5 @@
 把处理后的dfLS表格导出并覆盖原“泡泡图历史数据.xlsx”
 最后把处理后的dfPPT表格，导出并覆盖原“泡泡图当月数据.xlsx”。
 
+把程序中，所有网址、账号、密码放到“泡泡图数据统计.py”同目录下的“config.py”中,目录下如果已存在这个文件，则先读取这个文件数据，如果找到相同网址，则使用当前网址后面的登陆账号和密码。如果程序中的网址在“config.py”中不存在，则在不影响“config.py”其他数据的情况下，在后面添加网址、登陆账号和密码。程序中所有网址，账号，密码统一从config.py调用。
 
