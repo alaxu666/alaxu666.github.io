@@ -125,7 +125,13 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
         m = re.match(r'^(\d{6})-?$', s)
         return m.group(1) if m else None
 
+    # 从dfTK_ZJ和dfXM_ZJ中都提取任务号
     Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+    if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+        Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+        Lq.extend(Lq_xm)
+    # 去重
+    Lq = list(set(Lq))
 
     # 读取 config.py 中的 DOWNLOAD_DIR
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -204,7 +210,10 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
                     return f"{code}-{suffix}"
                 return value
 
+            # 对dfTK_ZJ和dfXM_ZJ都应用替换
             dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+            if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+                dfXM_ZJ["项目名"] = dfXM_ZJ["项目名"].astype(str).apply(replace_project_name)
     else:
         if dfProject_List.empty:
             print("警告：dfProject_List 为空，无法执行任务书编号匹配")

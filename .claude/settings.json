@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_pkr_names_email.py)"
+      "Bash(C:/Users/uxuxs004/AppData/Local/Programs/Python/Python313/python.exe test_pkr_names_email.py)",
+      "Bash(python 库存统计.py)"
     ]
   }
 }
