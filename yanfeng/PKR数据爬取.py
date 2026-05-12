@@ -30,7 +30,12 @@ except ImportError:
     print("注意: pyperclip未安装，将跳过剪贴板复制功能")
 
 # 导入配置文件
-from config import *
+from config_loader import load_config_module
+
+config = load_config_module()
+for name in dir(config):
+    if name.isupper():
+        globals()[name] = getattr(config, name)
 
 class PKRDataCrawler:
     def __init__(self):

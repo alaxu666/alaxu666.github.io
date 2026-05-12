@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import datetime
 from difflib import SequenceMatcher
+from config_loader import get_config_path
 
 import pandas as pd
 from selenium import webdriver
@@ -24,9 +25,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-config_path = os.path.join(script_dir, 'config.py')
-if not os.path.exists(config_path):
-    raise FileNotFoundError(f'未找到配置文件: {config_path}')
+config_path = get_config_path()
 
 CONFIG_KEYS = {
     'PKR_LOGIN_URL': 'https://plmcnprdawc.yanfeng.com:3000/#/showHome',

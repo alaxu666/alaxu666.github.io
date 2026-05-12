@@ -2,14 +2,15 @@ import requests
 import pandas as pd
 import time
 from datetime import datetime
+from config_loader import load_config_module
 
-# ==================== 配置信息 ====================
-APP_ID = "cli_a974384008a1dbc9"
-APP_SECRET = "iEEVmnEQjzA3Wte7P3rHxbn6ulBvZOxL"
-APP_TOKEN = "DWRubGKJyaOxp1sF5FXcig5NnSd"
-TABLE_ID = "tbl1G062INm1DObt"
-VIEW_ID = "vew6o4G2Bj"
-EXCEL_PATH = r"C:\XSR\githubPage\yanfeng\PKR确认信息\PKR未完成情况（近两周）.xlsx"
+config = load_config_module()
+APP_ID = config.APP_ID
+APP_SECRET = config.APP_SECRET
+APP_TOKEN = config.APP_TOKEN
+TABLE_ID = config.TABLE_ID
+VIEW_ID = config.VIEW_ID
+EXCEL_PATH = config.EXCEL_PATH
 
 # ==================== 获取 token ====================
 def get_tenant_access_token(app_id, app_secret):

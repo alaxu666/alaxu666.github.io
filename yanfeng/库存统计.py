@@ -6,6 +6,7 @@ import subprocess
 import os
 import sys
 import glob
+from config_loader import load_config_module
 
 # ================== 原有数据读取和处理（不变） ==================
 dfLY = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/库存统计.xlsx", sheet_name="本周领用报表")
@@ -133,20 +134,12 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
     # 去重
     Lq = list(set(Lq))
 
-    # 读取 config.py 中的 DOWNLOAD_DIR
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "config.py")
-    download_dir = None
-    if os.path.exists(config_path):
-        with open(config_path, encoding="utf-8") as cf:
-            config_text = cf.read()
-        match = re.search(r'DOWNLOAD_DIR\s*=\s*r?["\']([^"\']*)["\']', config_text)
-        if match:
-            download_dir = match.group(1)
-        else:
-            print("警告：未能从 config.py 中解析 DOWNLOAD_DIR")
-    else:
-        print(f"警告：未找到配置文件：{config_path}")
+    try:
+        config = load_config_module()
+        download_dir = config.DOWNLOAD_DIR
+    except Exception as e:
+        download_dir = None
+        print(f"读取 config.py 失败: {e}")
 
     dfProject_List = pd.DataFrame()
     if download_dir:
