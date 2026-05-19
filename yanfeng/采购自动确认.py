@@ -554,8 +554,8 @@ def main():
         Login(driver)
         time.sleep(3)
         PurchaseApplicationApproval(driver)
-        print("\n操作完成，浏览器将在15秒后关闭...")
-        time.sleep(15)
+        print("\n操作完成，浏览器将在1秒后关闭...")
+        time.sleep(1)
     except Exception as e:
         print(f"程序出错: {e}")
     finally:

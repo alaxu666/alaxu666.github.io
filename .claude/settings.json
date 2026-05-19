@@ -5,7 +5,12 @@
       "Bash(python 库存统计.py)",
       "Bash(dir \"本周库存统计.xlsx\")",
       "Bash(dir \"专业库存图表.pdf\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python PKR数据爬取.py --help)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, '.'\\); from config_loader import load_config_module; print\\('配置加载成功'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(timeout 10 python PKR数据爬取.py)",
+      "Bash(python PKR数据爬取.py)"
     ]
   }
 }

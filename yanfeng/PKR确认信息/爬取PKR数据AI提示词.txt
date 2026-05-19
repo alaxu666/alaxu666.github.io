@@ -126,3 +126,21 @@ shirong.xu@yanfeng.com
 
 PKR信息列中的数据，把“Total”改为“最低打分：”，把PKRname和PKRscore中间的“,”替换为“的PKR打分：”，在每个PKRscore后面，增加“；”
 修改“PKR信息”列的格式后，“未完成PKR信息”列的输出发生了偏差，按照下面的要求，重新修改代码：等待df1中“PKR信息”列完成数据采集并格式化后，分析一下“PKR信息”列数据，如果存在PKRscore≠100（每一行","后面的数字），则把这一行格式化后的数据数据（PKRname,PKRscore）添加到“未完成PKR信息”，如果一个“PKR信息”数据中，存在多行PKRscore≠100，则将这些数据都放到“未完成PKR信息”，分多行显示。如果“PKR信息”数据中全部的PKRscore都是100，则在“未完成PKR信息”中填入“完成”
+
+config.py中，保存了一些敏感信息，我不想放在git仓库，每次都上传到github中，所以把路径改到了本地的其他目录内，在git仓库中放了config_DIR.py，其中有config.py的本地路径，读取这个路径后，在程序中导入这个路径下的配置文件config.py。帮我检查本仓库中其他文件是否也有引用config.py的程序，把代码全部都修改掉。
+
+
+
+把PKR数据爬取.py中的网页登陆部分代码，打包成函数放到YanfengAutoWork.py中，函数名叫PLMLogin，以后直接调用这个函数就能完成登陆。登陆完成后，下载Project_List部分代码，打包成名为DL_Project_List的函数，也放到YanfengAutoWork.py中，程序直接调用这个函数完成下载。读取最新修改的Project_List?.xls部分代码，也打包成名为RD_Project_List的函数，放在YanfengAutoWork.py中，函数的返回值是pandas的frame类型，存放Project_List的数据。
+
+把PKR数据爬取.py中，发现EBP Leader空值的数据，去PLM系统爬取数据的那部分代码，打包成函数放到YanfengAutoWork.py中，函数名叫FindEBPLeader，函数功能是：传入一个由Project ID组成的列表数据，函数功能是完成从PLM系统中提取EBPLeader数据，并返回一个frame格式的列表，列表第一列Project ID，第二列是网页中查到的EBPLeader数据，函数功能描述如下（这段代码需要放在完成PLMLogin后）：
+定位到id="iframeContent"，展开//span[text()='XSO Management']/parent::a元素，
+点击//span[text()='Program Dashboard']/parent::a元素
+定位到class="iframe_tab_menu-1-1"的iframe中，在这个iframe中执行以下操作
+重新对EBP Leader为空值的Project ID进行循环，循环体开始：
+定位id="searchProject"的input框，输入当前循环的Project ID
+点击onclick="searchproject()"的button。
+找到aria-describedby="grid-table_real_pm_name"的<td>标签，提取标签中的title属性值，并保存到EBP Leader中。
+循环体结束。
+把PKR数据爬取.py这部分代码，替换成引用YanfengAutoWork.py中的FindEBPLeader函数实现。
+最后如果导出excel失败，比如文件被打开后锁住了。则跳出提示词，“文件已被锁定，尝试关闭文件后，按回车键再试”

@@ -135,6 +135,8 @@ class PKRDataCrawler:
             print(f"Outlook COM 打开失败: {e}")
             return False
 
+        self.wait = WebDriverWait(self.driver, 10)
+
     def navigate_to_xso_management(self):
         """导航到XSO Management页面"""
         try:
@@ -387,49 +389,45 @@ class PKRDataCrawler:
             print(f"处理Excel数据过程中出现错误: {e}")
             raise
 
+    
     def navigate_to_pkr_management(self):
-        """导航到PKR Management页面（确保先展开XSO & PKR菜单）"""
+        """导航到PKR Management页面"""
         try:
-            # 1. 回到顶层
+            # 切换回主文档
             self.driver.switch_to.default_content()
             print("已切换回主文档")
 
-            # 2. 等待并点击 XSO & PKR 菜单（这是激活左侧树的关键）
-            xso_pkr_div = WebDriverWait(self.driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "div[title='XSO & PKR']"))
-            )
-            xso_pkr_div.click()
-            print("已点击 XSO & PKR")
+            # 等待页面加载
+            time.sleep(PAGE_LOAD_WAIT_TIME)
 
-            # 3. 等待 iframeContent 出现（增加超时到30秒）
-            iframe_content = WebDriverWait(self.driver, 30).until(
+            # 定位iframeContent
+            iframe_content = self.wait.until(
                 EC.presence_of_element_located((By.ID, "iframeContent"))
             )
-            self.driver.switch_to.frame(iframe_content)
-            print("已切换到 iframeContent")
 
-            # 4. 展开 PKR Management 链接（左侧菜单）
-            pkr_management = WebDriverWait(self.driver, 30).until(
+            # 切换到iframe
+            self.driver.switch_to.frame(iframe_content)
+            print("已切换到iframeContent")
+
+            # 展开PKR Management
+            pkr_management = self.wait.until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "PKR Management"))
             )
             pkr_management.click()
-            print("已展开 PKR Management")
+            print("已展开PKR Management")
 
-            # 5. 点击 Program PKR Summary
-            pkr_summary = WebDriverWait(self.driver, 30).until(
+            # 点击Program PKR Summary
+            pkr_summary = self.wait.until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "Program PKR Summary"))
             )
             pkr_summary.click()
-            print("已点击 Program PKR Summary")
+            print("已点击Program PKR Summary")
 
-            # 6. 等待内容iframe加载完成
-            time.sleep(PAGE_LOAD_WAIT_TIME)   # 或使用更智能的等待
+            # 等待iframe加载
+            time.sleep(PAGE_LOAD_WAIT_TIME)
 
         except Exception as e:
             print(f"导航到PKR Management过程中出现错误: {e}")
-            # 可选：打印当前页面源码用于调试
-            with open("debug_page.html", "w", encoding="utf-8") as f:
-                f.write(self.driver.page_source)
             raise
 
     def extract_pkr_info(self, df1):
@@ -611,7 +609,7 @@ class PKRDataCrawler:
                                 df1.at[idx, '是否确认'] = '未确认(Cao liang)'  # 混合状态
                     else:
                         if pkr_info and pkr_info.strip():
-                            df1.at[idx, '是否确认'] = '未评分(工程师)'
+                            df1.at[idx, '是否确认'] = '未递交(工程师)'
                         else:
                             df1.at[idx, '是否确认'] = ''
 
@@ -730,11 +728,6 @@ class PKRDataCrawler:
                 'Phase 5 Gate Exit-PLR'
             ]
 
-            # 统一转换日期列，避免字符串与 Timestamp 比较失败
-            for col in date_columns:
-                if col in df1.columns:
-                    df1[col] = pd.to_datetime(df1[col], errors='coerce')
-
             # 转换日期列并找到每个项目的最早日期
             df1['最早日期'] = pd.NaT
 
@@ -761,93 +754,49 @@ class PKRDataCrawler:
             print(f"数据排序过程中出现错误: {e}")
             return df1
 
-    # ==================== 新增：删除超过下周日的 Phase 数据 ====================
-    def remove_phases_beyond_next_sunday(self, df1):
-        """删除当前状态对应的 Gate Exit 日期在下周日之后的行（不包含下周日）"""
-        today = datetime.now()
-        # 计算下周日：本周日 + 7天
-        current_sunday = today + timedelta(days=(6 - today.weekday()))
-        next_sunday = current_sunday + timedelta(days=7)
-        next_sunday = next_sunday.replace(hour=0, minute=0, second=0, microsecond=0)
-        print(f"删除条件：Gate Exit 日期 > {next_sunday.strftime('%Y-%m-%d')} 的行将被移除")
-
-        phase_column_map = {
-            'Phase 1 Gate Exit-GO': 'Phase 1 Gate Exit-GO',
-            'Phase 2 Gate Exit-DVR': 'Phase 2 Gate Exit-DVR',
-            'Phase 3 Gate Exit-FPR': 'Phase 3 Gate Exit-FPR',
-            'Phase 4 Gate Exit-CPA': 'Phase 4 Gate Exit-CPA',
-        }
-
-        original_len = len(df1)
-        keep_mask = pd.Series([True] * original_len)
-
-        for idx, row in df1.iterrows():
-            current_status = row.get('当前状态', '')
-            if current_status in phase_column_map:
-                date_col = phase_column_map[current_status]
-                if date_col in df1.columns and pd.notna(row[date_col]):
-                    gate_date = row[date_col]
-                    # 如果日期超过下周日，则标记为删除
-                    if gate_date > next_sunday:
-                        keep_mask.iloc[idx] = False
-
-        df1_filtered = df1[keep_mask].copy()
-        print(f"删除了 {original_len - len(df1_filtered)} 行超过下周日的 Phase 数据，剩余 {len(df1_filtered)} 行")
-        return df1_filtered
-
-    # ==================== 修改：直接覆盖保存历史未完成记录 ====================
-    def save_historical_incomplete_records(self, df1):
-        """从 df1 中提取未完成确认的项目（非“完成确认”且非空，排除 Phase 1），覆盖保存到历史记录文件"""
-        historical_file = os.path.join(self.confirm_dir, "PKR历史未完成记录.xlsx")
-        # 筛选条件：是否确认 不是“完成确认” 且 不为空，并且当前状态不是 Phase 1
-        mask = (
-            (df1['是否确认'] != "完成确认") &
-            (df1['是否确认'].notna()) &
-            (df1['是否确认'].astype(str).str.strip() != "") &
-            (df1['当前状态'] != 'Phase 1 Gate Exit-GO')
-        )
-        incomplete_df = df1[mask].copy()
-        if len(incomplete_df) > 0:
-            self.save_excel_with_retry(incomplete_df, historical_file, index=False)
-            print(f"已更新历史未完成记录，共 {len(incomplete_df)} 条，保存至 {historical_file}")
-        else:
-            # 如果没有未完成项目，删除历史文件（如果存在）
-            if os.path.exists(historical_file):
-                os.remove(historical_file)
-                print("所有项目已完成确认，已清空历史未完成记录文件")
-
-    # ==================== 新增：将历史未完成项目（不在当前 df1 中）重新加入 ====================
-    def add_missing_historical_projects(self, df1, original_project_list_file):
-        """读取历史未完成记录，将其中 Project ID 不在当前 df1 中的项目从原始 Project_List 中提取并加入 df1"""
-        historical_file = os.path.join(self.confirm_dir, "PKR历史未完成记录.xlsx")
-        if not os.path.exists(historical_file):
-            return df1
+    def manage_historical_pkr_records(self, df1):
+        """管理PKR历史未完成记录"""
         try:
-            hist_df = pd.read_excel(historical_file)
-            hist_project_ids = set(hist_df['Project ID'].astype(str).unique())
-            current_project_ids = set(df1['Project ID'].astype(str).unique())
-            missing_ids = hist_project_ids - current_project_ids
-            if not missing_ids:
-                return df1
+            historical_file = os.path.join(self.confirm_dir, "PKR历史未完成记录.xlsx")
 
-            print(f"历史记录中发现 {len(missing_ids)} 个项目不在当前数据中，尝试重新加入")
-            # 读取原始 Project_List 文件（未做任何筛选）
-            original_df = pd.read_excel(original_project_list_file)
-            # 筛选出缺失的项目（每个项目一行）
-            missing_rows = original_df[original_df['Project ID'].astype(str).isin(missing_ids)]
-            if len(missing_rows) == 0:
-                print("未能在原始文件找到缺失的项目，跳过")
-                return df1
+            # 读取现有的历史记录
+            historical_df = None
+            if os.path.exists(historical_file):
+                try:
+                    historical_df = pd.read_excel(historical_file)
+                    print(f"读取到{len(historical_df)}条历史未完成记录")
+                except Exception as e:
+                    print(f"读取历史记录文件失败: {e}")
+                    historical_df = None
 
-            # 对缺失项目执行相同的日期筛选和分行逻辑（调用 filter_data_by_date_range）
-            new_rows = self.filter_data_by_date_range(missing_rows)
-            # 合并到 df1
-            df1 = pd.concat([df1, new_rows], ignore_index=True)
-            print(f"已添加 {len(new_rows)} 行历史项目数据")
-            return df1
+            # 从当前数据中提取未完成确认的项目（基于是否确认字段）
+            # 同时排除"当前状态"为"Phase 1 Gate Exit-GO"的项目
+            incomplete_projects = df1[
+                (df1['是否确认'] != "完成确认") &
+                (df1['当前状态'] != 'Phase 1 Gate Exit-GO')
+            ].copy()
+
+            if historical_df is not None and len(historical_df) > 0:
+                # 合并历史记录和当前未完成项目
+                # 使用Project ID作为唯一标识
+                all_incomplete = pd.concat([historical_df, incomplete_projects], ignore_index=True)
+
+                # 去重，保留最新的记录
+                all_incomplete = all_incomplete.drop_duplicates(subset=['Project ID'], keep='last')
+
+                print(f"合并后共有{len(all_incomplete)}条未完成记录")
+            else:
+                all_incomplete = incomplete_projects
+                print(f"新增{len(all_incomplete)}条未完成记录")
+
+            # 注意：不在主输出中添加历史记录，只在历史记录文件中维护
+            # 历史记录文件会单独保存，不会混入主输出
+
+            return df1, all_incomplete, historical_file
+
         except Exception as e:
-            print(f"处理历史未完成记录文件时出错: {e}")
-            return df1
+            print(f"管理历史记录过程中出现错误: {e}")
+            return df1, pd.DataFrame(), ""
 
     def add_gate_week_info(self, df1):
         """添加过门周信息"""
@@ -894,6 +843,45 @@ class PKRDataCrawler:
         except Exception as e:
             print(f"添加过门周信息过程中出现错误: {e}")
             return df1
+
+    def update_historical_records(self, historical_df, current_df, historical_file):
+        """更新历史记录文件"""
+        try:
+            if historical_df is None or len(historical_df) == 0:
+                return
+
+            print("正在更新历史记录...")
+
+            # 从当前数据中找出已完成的历史项目
+            completed_projects = current_df[
+                (current_df['未完成PKR信息'] == "完成") &
+                (current_df['Project ID'].isin(historical_df['Project ID']))
+            ]
+
+            if len(completed_projects) > 0:
+                completed_ids = set(completed_projects['Project ID'])
+                print(f"发现{len(completed_ids)}个历史项目已完成PKR")
+
+                # 从历史记录中移除已完成的项目
+                updated_historical = historical_df[~historical_df['Project ID'].isin(completed_ids)]
+                removed_count = len(historical_df) - len(updated_historical)
+                print(f"从历史记录中移除{removed_count}个已完成项目")
+            else:
+                updated_historical = historical_df
+                print("没有发现新的已完成项目")
+
+            # 保存更新后的历史记录
+            if len(updated_historical) > 0:
+                self.save_excel_with_retry(updated_historical, historical_file, index=False)
+                print(f"历史记录已更新，保存{len(updated_historical)}条记录到: {historical_file}")
+            else:
+                # 如果历史记录为空，删除文件
+                if os.path.exists(historical_file):
+                    os.remove(historical_file)
+                    print("历史记录已清空，删除文件")
+
+        except Exception as e:
+            print(f"更新历史记录过程中出现错误: {e}")
 
     def save_excel_with_retry(self, df, file_path, **kwargs):
         """尝试保存 Excel 文件，遇到文件锁定时提示用户关闭文件后重试。"""
@@ -985,6 +973,9 @@ class PKRDataCrawler:
             # 分析未完成PKR信息
             df1 = self.analyze_incomplete_pkr(df1)
 
+            # 管理历史记录
+            df1, historical_df, historical_file = self.manage_historical_pkr_records(df1)
+
             # 添加过门周信息
             df1 = self.add_gate_week_info(df1)
 
@@ -1019,7 +1010,7 @@ class PKRDataCrawler:
             incomplete_df = df1[incomplete_mask].copy()
             incomplete_final_df = incomplete_df[existing_columns].copy()
 
-            # 导出未完成数据（只导出一次）
+            # 导出未完成数据
             incomplete_file = os.path.join(self.confirm_dir, "PKR未完成情况（近两周）.xlsx")
             self.save_excel_with_retry(incomplete_final_df, incomplete_file, index=False)
             print(f"未完成数据已导出到: {incomplete_file}")
@@ -1029,10 +1020,15 @@ class PKRDataCrawler:
             # 返回未完成文件的路径（用于后续同步到飞书）
             output_file = incomplete_file
 
-            # ==================== 修改：直接保存历史未完成记录（覆盖） ====================
-            self.save_historical_incomplete_records(df1)
+            # 导出历史未完成记录（如有）
+            if len(historical_df) > 0:
+                self.save_excel_with_retry(historical_df, historical_file, index=False)
+                print(f"历史未完成记录已保存到: {historical_file}")
 
-            return df1, output_file
+            # 更新历史记录（移除已完成的项目）
+            self.update_historical_records(historical_df, df1, historical_file)
+
+            return output_file
 
         except Exception as e:
             print(f"导出数据过程中出现错误: {e}")
@@ -1154,29 +1150,29 @@ class PKRDataCrawler:
         """自动发送邮件，包含未完成确认的数据"""
         try:
             # 首先更新"是否确认"列
-            # for idx, row in df1.iterrows():
-            #     incomplete_pkr = str(row.get('未完成PKR信息', '')).strip()
-            #     confirmed_info = str(row.get('Confirmed', '')).strip()
+            for idx, row in df1.iterrows():
+                incomplete_pkr = str(row.get('未完成PKR信息', '')).strip()
+                confirmed_info = str(row.get('Confirmed', '')).strip()
 
-            #     if incomplete_pkr == "完成":
-            #         # 检查Confirmed列是否全部confirmed
-            #         if confirmed_info and "Confirmed" in confirmed_info:
-            #             # 检查是否所有PKR都confirmed
-            #             confirmed_lines = confirmed_info.split('\n')
-            #             all_confirmed = True
-            #             for line in confirmed_lines:
-            #                 if line.strip() and not line.endswith(',Confirmed'):
-            #                     all_confirmed = False
-            #                     break
-            #             if all_confirmed:
-            #                 df1.at[idx, '是否确认'] = '完成确认'
-            #             else:
-            #                 df1.at[idx, '是否确认'] = '未确认(cao liang)'
-            #         else:
-            #             df1.at[idx, '是否确认'] = '未确认(cao liang)'
-            #     else:
-            #         # 如果未完成PKR信息不是"完成"，则显示"未递交(工程师)"
-            #         df1.at[idx, '是否确认'] = '未递交(工程师)'
+                if incomplete_pkr == "完成":
+                    # 检查Confirmed列是否全部confirmed
+                    if confirmed_info and "Confirmed" in confirmed_info:
+                        # 检查是否所有PKR都confirmed
+                        confirmed_lines = confirmed_info.split('\n')
+                        all_confirmed = True
+                        for line in confirmed_lines:
+                            if line.strip() and not line.endswith(',Confirmed'):
+                                all_confirmed = False
+                                break
+                        if all_confirmed:
+                            df1.at[idx, '是否确认'] = '完成确认'
+                        else:
+                            df1.at[idx, '是否确认'] = '未确认(cao liang)'
+                    else:
+                        df1.at[idx, '是否确认'] = '未确认(cao liang)'
+                else:
+                    # 如果未完成PKR信息不是"完成"，则显示"未递交(工程师)"
+                    df1.at[idx, '是否确认'] = '未递交(工程师)'
 
             # 筛选出需要关注的数据（排除"完成确认"的）
             incomplete_df = df1[df1['是否确认'] != '完成确认'].copy()
@@ -1193,47 +1189,36 @@ class PKRDataCrawler:
             # 获取收件人（未完成人名第一行）并格式化邮箱地址
             recipient_emails = ""
             if '未完成人名' in df1.columns and len(df1) > 0:
-                raw_value = df1.iloc[0]['未完成人名']
-                if pd.notna(raw_value):
-                    raw_emails = str(raw_value).strip()
-                    print(f"[DEBUG] 原始未完成人名内容: '{raw_emails}'")
-                    if raw_emails:
-                        # 分割邮箱地址（支持逗号和分号分隔）
-                        import re
-                        email_list = [email.strip() for email in re.split(r'[;,]', raw_emails) if email.strip()]
-                        formatted_emails = []
+                raw_emails = str(df1.iloc[0].get('未完成人名', '')).strip()
 
-                        for email in email_list:
-                            if '@yanfeng.com' in email:
-                                # Excel中的邮箱地址已经是正确的格式，只需确保首字母大写
-                                username = email.split('@')[0]
-                                if '.' in username:
-                                    parts = username.split('.')
-                                    if len(parts) == 2:
-                                        # 确保首字母大写，其余小写（保持现有的名.姓格式）
-                                        first_name = parts[0].capitalize()  # 名
-                                        last_name = parts[1].capitalize()  # 姓
-                                        formatted_username = f"{first_name}.{last_name}"
-                                        formatted_email = f"{formatted_username}@yanfeng.com"
-                                        formatted_emails.append(formatted_email)
-                                    else:
-                                        formatted_emails.append(email)
+                if raw_emails:
+                    # 分割邮箱地址（支持逗号和分号分隔）
+                    import re
+                    email_list = [email.strip() for email in re.split(r'[;,]', raw_emails) if email.strip()]
+                    formatted_emails = []
+
+                    for email in email_list:
+                        if '@yanfeng.com' in email:
+                            # Excel中的邮箱地址已经是正确的格式，只需确保首字母大写
+                            username = email.split('@')[0]
+                            if '.' in username:
+                                parts = username.split('.')
+                                if len(parts) == 2:
+                                    # 确保首字母大写，其余小写（保持现有的名.姓格式）
+                                    first_name = parts[0].capitalize()  # 名
+                                    last_name = parts[1].capitalize()  # 姓
+                                    formatted_username = f"{first_name}.{last_name}"
+                                    formatted_email = f"{formatted_username}@yanfeng.com"
+                                    formatted_emails.append(formatted_email)
                                 else:
                                     formatted_emails.append(email)
                             else:
                                 formatted_emails.append(email)
+                        else:
+                            formatted_emails.append(email)
 
-                        # 用分号连接格式化后的邮箱地址
-                        # recipient_emails = '; '.join(formatted_emails)
-                        recipient_emails = raw_emails
-                    else:
-                        print("未完成人名字段为空字符串")
-            else:
-                print("DataFrame 中没有 '未完成人名' 列或为空")
-
-            if not recipient_emails:
-                print(f"使用默认收件人: {RECIPIENT_EMAIL}")
-                recipient_emails = RECIPIENT_EMAIL
+                    # 用分号连接格式化后的邮箱地址
+                    recipient_emails = '; '.join(formatted_emails)
 
             if not recipient_emails:
                 recipient_emails = RECIPIENT_EMAIL  # 如果没有未完成人名，使用默认收件人
@@ -1291,12 +1276,9 @@ class PKRDataCrawler:
                 if confirm_status == "未递交(工程师)":
                     row_class = "urgent"
                     status_class = "status-submit"
-                elif confirm_status == "未确认(Cao Liang)":
+                elif confirm_status == "未确认(cao liang)":
                     row_class = "warning"
                     status_class = "status-confirm"
-                elif confirm_status == "未评分(工程师)":      # 可选，增加对这种状态的样式
-                    row_class = "urgent"
-                    status_class = "status-submit"
 
                 html_content += f"""
             <tr class="{row_class}">
@@ -1311,8 +1293,8 @@ class PKRDataCrawler:
             </table>
             <div class="footer">
                 <p>总计 {len(incomplete_df)} 个项目需要关注</p>
-                <p><span class="status-submit">未评分(工程师)</span> - 需要工程师提交PKR</p>
-                <p><span class="status-confirm">未确认(Cao Liang)</span> - 需要曹亮确认</p>
+                <p><span class="status-submit">未递交(工程师)</span> - 需要工程师提交PKR</p>
+                <p><span class="status-confirm">未确认(cao liang)</span> - 需要曹亮确认</p>
             </div>
             </body>
             </html>
@@ -1372,10 +1354,7 @@ class PKRDataCrawler:
                 body = urllib.parse.quote(email_body)
 
                 # 构建包含抄送的mailto URL
-                mailto_recipients = recipient_emails.replace(';', ',')
-                mailto_recipients = urllib.parse.quote(mailto_recipients, safe=',@.')
-                cc_encoded = urllib.parse.quote(cc_email, safe=',@.')
-                mailto_url = f"mailto:{mailto_recipients}?subject={subject_encoded}&body={body}&cc={cc_encoded}"
+                mailto_url = f"mailto:{recipient_emails}?subject={subject_encoded}&body={body}&cc={cc_email}"
 
                 # 打开邮件客户端
                 os.startfile(mailto_url)
@@ -1411,17 +1390,12 @@ class PKRDataCrawler:
 
             # 使用模块化函数：下载Project_List数据
             latest_file = DL_Project_List(self.driver, self.wait, self.download_dir)
-            # 保存原始文件路径，以备后续使用
-            self.original_project_list_file = latest_file
 
             # 使用模块化函数：读取和处理Excel数据
             df1 = RD_Project_List(latest_file)
 
             # 筛选Phase 1-4 Gate Exit日期在本周和下周末内的数据
             df1 = self.filter_data_by_date_range(df1)
-
-            # ==================== 将历史未完成项目（不在当前 df1 中）重新加入 ====================
-            df1 = self.add_missing_historical_projects(df1, self.original_project_list_file)
 
             # 提取EBP Leader信息
             df1 = self.update_ebp_leader_info(df1)
@@ -1432,20 +1406,19 @@ class PKRDataCrawler:
             # 提取PKR信息
             df1 = self.extract_pkr_info(df1)
 
-            # ==================== 删除超过下周日的 Phase 数据 ====================
-            df1 = self.remove_phases_beyond_next_sunday(df1)
-
             # 导出最终数据
-            df1, output_file = self.export_final_data(df1)
+            output_file = self.export_final_data(df1)
 
             # 自动同步到飞书表格
             try:
                 print("\n开始同步数据到飞书表格...")
                 import sys
                 import os
+                # 确保导入路径正确
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 if current_dir not in sys.path:
                     sys.path.insert(0, current_dir)
+
                 from PKR未完成情况同步到飞书 import sync_pkr_data_to_feishu
                 sync_pkr_data_to_feishu()
                 print("飞书表格同步完成！")
@@ -1461,7 +1434,9 @@ class PKRDataCrawler:
             print("PKR数据爬取流程完成！")
             print(f"结果已保存到: {output_file}")
 
-            # 已移除等待用户输入的代码，程序将自动关闭浏览器并退出
+            # 保持浏览器打开
+            print("浏览器将保持打开状态，按回车键关闭...")
+            input()
 
         except Exception as e:
             print(f"运行过程中出现错误: {e}")

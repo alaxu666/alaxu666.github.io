@@ -6,6 +6,10 @@ import subprocess
 import os
 import sys
 import glob
+
+# 添加当前目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from config_loader import load_config_module
 
 # ================== 原有数据读取和处理（不变） ==================

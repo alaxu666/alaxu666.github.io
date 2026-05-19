@@ -1,0 +1,47 @@
+调用YanfengAutoWork.py中的setup_driver, PLMLogin, DL_Project_List, RD_Project_List, FindEBPLeader等函数。
+使用PLMLogin登陆PLM系统。
+使用DL_Project_List下载项目信息表，下载完成后，先不要关闭浏览器，后面可能还会用到，等最后所有程序执行完毕后，再关闭。
+使用RD_Project_List读取下载的项目信息表数据保存到pandas表格dfPL中。
+dfPL中仅保留下面这些字段的数据，其他字段全部删除：Project ID、Project Name、EBP Leader、Product Engineer、Project State、Phase 2 Gate Exit-DVR、Phase 3 Gate Exit-FPR、Phase 4 Gate Exit-CPA。并且把Project ID中的数据，仅保留数字部分，比如“30035236-EBP”，用“30035236”代替。Phase 2 Gate Exit-DVR、Phase 3 Gate Exit-FPR、Phase 4 Gate转换为短日期数据（仅保留年月日）
+在dfPL后面新建3个字段，分别是：“项目号” “工作令号” “项目名” “phase 2 score” “phase 3 score” “Phase 4 score”
+
+
+读取config_DIR.py中的路径下的config.py文件，其中飞书APP和表格相关信息：
+APP_ID = "这里保存的是APP_ID"
+APP_SECRET = "这里保存的是APP_SECRET"
+APP_TOKEN = "这里保存的是APP_TOKEN"
+TABLE_ID_P = "这里保存的是TABLE_ID_P"
+VIEW_ID_P = "这里保存的是VIEW_ID_P"
+飞书表格TABLE_ID_P对应的字段ID和数据类型如下：
+字段名称                           字段ID                      数据类型                                                               
+----------------------------------------------------------------------                                                                
+Project ID                     fldFp4TSqa                1                                                                            
+Project Name                   fldCGjDKst                1                                                                            
+EBP Leader                     fldgznJHPT                1                                                                            
+Product Engineer               fldkya7LLR                1                                                                            
+Project State                  fld8pryfXc                1                                                                            
+Phase 2 Gate Exit-DVR          fldkaRWGWD                5              
+Phase 3 Gate Exit-FPR          fld7v1tBce                5              
+Phase 4 Gate Exit-CPA          fld0fVUtAT                5              
+项目号                            fldUIJa2wq                1              
+工作令号                           fld6jHfULs                1              
+项目名                            fldh8iiilp                1              
+phase 2 score                  fldoHEW8f3                2              
+phase 3 score                  fldzwZv8lu                2              
+Phase 4 score                  fldFwkm2ox                2
+读取飞书TABLE_ID_P中的所有字段的数据（包括“项目号” “工作令号” “项目名” “phase 2 score” “phase 3 score” “phase 4 score”），并保存到pandas表格dfPLFS中。
+表格dfPLFS中的Phase 2 Gate Exit-DVR、Phase 3 Gate Exit-FPR、Phase 4 Gate转换为短日期数据（仅保留年月日）。
+对比dfPLFS和dfPL中的EBP Leader，如果dfPL中EBP Leader列有空值的，则从dfPLFS中查找相同的Project ID对应的EBP Leader，并复制进去。
+如果dfPL中EBP Leader列还存在空值，则把这些数据的Project ID放到一个列表中，传入FindEBPLeader函数中，处理完成后，把找的的EBPleader存入dfPL对应的数据中。
+对比dfPLFS和dfPL中，相同Project ID所对应的Project Name、Product Engineer、Project State、Phase 2 Gate Exit-DVR、Phase 3 Gate Exit-FPR、Phase 4 Gate是否有差异，如发现有不同，则把发现的不同数据，按照dfPL中的数据，更新到dfPLFS中，同时修改飞书表格（TABLE_ID_P）对应Project ID中有差异的字段数据，注意是在原有数据上修改，不要新增（注意，上传到飞书表格Phase 2 Gate Exit-DVR、Phase 3 Gate Exit-FPR、Phase 4 Gate的数据都要转换为飞书认可的日期类型）。如果dfPL中存在Project ID，但在dfPLFS中不存在的数据，则把这些数据添加到dfPLFS中，同时添加到飞书表格TABLE_ID_P中（在TABLE_ID_P表格中新增数据）。
+在dfPLFS中，找到项目号	工作令号	项目名三列中，值为空的数据，对这些数据进行如下操作：找到这些数据对应Project ID列，并把Project ID复制到项目号列中，找到这些数据对应Project Name列，提取Project Name字符串中第二个“,”后面的连续6位数字，把这6位数字填入工作令号列中，如果找不到，则在工作令号列中填入“000000”。提取Project Name字符串中第二个“,”到第5个“,”之间的文本，不包括“,”并删除这段字符串前后的空格，然后填入到项目名列中。把上面这些更新的数据，同时更新到飞书TABLE_ID_P表格对应的Project ID数据中。
+在dfPLFS中找出Phase 4 score为空的数据，并且排除Phase 4 Gate Exit-CPA在下周日以后的数据。把这些数据导出到“飞书项目信息表更新.py”所在目录下“\项目信息表\发运前检查计划.xlsx”，如果有同名文件，则覆盖即可。如果最后需要导出的发运前检查计划.xlsx数据为空，则导出含字段的空表。如果最后导出的发运前检查计划.xlsx中有数据，自动打开这个表格。
+最后把dfPLFS导出到“飞书项目信息表更新.py”所在目录下“\项目信息表\项目信息表.xlsx”，如果有同名文件，则覆盖即可。
+最后如果导出excel失败，比如文件被打开后锁住了。则跳出提示词，“文件已被锁定，尝试关闭文件后，按回车键再试”
+
+
+
+
+
+
+
