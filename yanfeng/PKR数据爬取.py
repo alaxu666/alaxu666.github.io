@@ -388,27 +388,53 @@ class PKRDataCrawler:
             raise
 
     def navigate_to_pkr_management(self):
-        """导航到PKR Management页面（确保先展开XSO & PKR菜单）"""
+        """导航到PKR Management页面（自动检测左侧菜单是否已展开）"""
         try:
             # 1. 回到顶层
             self.driver.switch_to.default_content()
             print("已切换回主文档")
 
-            # 2. 等待并点击 XSO & PKR 菜单（这是激活左侧树的关键）
-            xso_pkr_div = WebDriverWait(self.driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "div[title='XSO & PKR']"))
-            )
-            xso_pkr_div.click()
-            print("已点击 XSO & PKR")
+            # 2. 尝试直接定位 iframeContent 并切换到其中，检测 PKR Management 链接
+            menu_already_expanded = False
+            try:
+                # 短超时检测 iframeContent 是否存在
+                iframe = WebDriverWait(self.driver, 3).until(
+                    EC.presence_of_element_located((By.ID, "iframeContent"))
+                )
+                self.driver.switch_to.frame(iframe)
+                print("已切换到 iframeContent")
 
-            # 3. 等待 iframeContent 出现（增加超时到30秒）
-            iframe_content = WebDriverWait(self.driver, 30).until(
-                EC.presence_of_element_located((By.ID, "iframeContent"))
-            )
-            self.driver.switch_to.frame(iframe_content)
-            print("已切换到 iframeContent")
+                # 在 iframe 内检测 PKR Management 链接是否可见（说明菜单已展开）
+                pkr_link = WebDriverWait(self.driver, 3).until(
+                    EC.visibility_of_element_located((By.LINK_TEXT, "PKR Management"))
+                )
+                if pkr_link.is_displayed():
+                    menu_already_expanded = True
+                    print("检测到 PKR Management 已展开，跳过 XSO & PKR 点击步骤")
+            except Exception:
+                # 未找到 iframe 或 PKR 链接，说明菜单未展开
+                print("未检测到已展开的 PKR Management，将执行完整导航流程")
+                # 确保回到顶层（如果之前切换了 iframe 但失败，也要回到顶层）
+                self.driver.switch_to.default_content()
 
-            # 4. 展开 PKR Management 链接（左侧菜单）
+            # 3. 如果菜单未展开，执行完整流程
+            if not menu_already_expanded:
+                # 点击 XSO & PKR
+                xso_pkr = WebDriverWait(self.driver, 30).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "div[title='XSO & PKR']"))
+                )
+                xso_pkr.click()
+                print("已点击 XSO & PKR")
+
+                # 等待 iframeContent 并切换
+                iframe = WebDriverWait(self.driver, 30).until(
+                    EC.presence_of_element_located((By.ID, "iframeContent"))
+                )
+                self.driver.switch_to.frame(iframe)
+                print("已切换到 iframeContent")
+
+            # 4. 此时肯定已经在 iframeContent 内，展开 PKR Management
+            # 注意：如果菜单已展开，再次点击可能不会造成副作用；如果未展开，则会展开子菜单
             pkr_management = WebDriverWait(self.driver, 30).until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "PKR Management"))
             )
@@ -422,14 +448,52 @@ class PKRDataCrawler:
             pkr_summary.click()
             print("已点击 Program PKR Summary")
 
-            # 6. 等待内容iframe加载完成
-            time.sleep(PAGE_LOAD_WAIT_TIME)   # 或使用更智能的等待
+            # 6. 等待内容加载
+            time.sleep(PAGE_LOAD_WAIT_TIME)
 
         except Exception as e:
             print(f"导航到PKR Management过程中出现错误: {e}")
-            # 可选：打印当前页面源码用于调试
-            with open("debug_page.html", "w", encoding="utf-8") as f:
+            # 调试：保存当前页面源码
+            with open("debug_pkr_navigation.html", "w", encoding="utf-8") as f:
                 f.write(self.driver.page_source)
+            raise
+
+    def _full_navigate_to_pkr_management(self):
+        """完整的导航流程（点击 XSO & PKR、切换 iframe 等）"""
+        try:
+            # 2. 等待并点击 XSO & PKR 菜单
+            xso_pkr_div = WebDriverWait(self.driver, 30).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "div[title='XSO & PKR']"))
+            )
+            xso_pkr_div.click()
+            print("已点击 XSO & PKR")
+
+            # 3. 等待 iframeContent 出现并切换
+            iframe_content = WebDriverWait(self.driver, 30).until(
+                EC.presence_of_element_located((By.ID, "iframeContent"))
+            )
+            self.driver.switch_to.frame(iframe_content)
+            print("已切换到 iframeContent")
+
+            # 4. 展开 PKR Management 链接
+            pkr_management = WebDriverWait(self.driver, 30).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, "PKR Management"))
+            )
+            pkr_management.click()
+            print("已展开 PKR Management")
+
+            # 5. 点击 Program PKR Summary
+            pkr_summary = WebDriverWait(self.driver, 30).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, "Program PKR Summary"))
+            )
+            pkr_summary.click()
+            print("已点击 Program PKR Summary")
+
+            # 6. 等待内容加载
+            time.sleep(PAGE_LOAD_WAIT_TIME)
+
+        except Exception as e:
+            print(f"完整导航流程中出现错误: {e}")
             raise
 
     def extract_pkr_info(self, df1):
@@ -604,11 +668,11 @@ class PKRDataCrawler:
                             if all_confirmed and not has_other:
                                 df1.at[idx, '是否确认'] = '完成确认'
                             elif all_submitted and not has_other:
-                                df1.at[idx, '是否确认'] = '未确认(Cao liang)'
+                                df1.at[idx, '是否确认'] = '未确认(Cao Liang)'
                             elif has_other:
                                 df1.at[idx, '是否确认'] = '未评分(工程师)'
                             else:
-                                df1.at[idx, '是否确认'] = '未确认(Cao liang)'  # 混合状态
+                                df1.at[idx, '是否确认'] = '没有指派任务'  # 混合状态
                     else:
                         if pkr_info and pkr_info.strip():
                             df1.at[idx, '是否确认'] = '未评分(工程师)'

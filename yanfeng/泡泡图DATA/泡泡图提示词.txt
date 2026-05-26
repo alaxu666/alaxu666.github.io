@@ -37,3 +37,18 @@
 
 把程序中，所有网址、账号、密码放到“泡泡图数据统计.py”同目录下的“config.py”中,目录下如果已存在这个文件，则先读取这个文件数据，如果找到相同网址，则使用当前网址后面的登陆账号和密码。如果程序中的网址在“config.py”中不存在，则在不影响“config.py”其他数据的情况下，在后面添加网址、登陆账号和密码。程序中所有网址，账号，密码统一从config.py调用。
 
+
+查找项目机械专家是谁：
+在最后导出excel前，添加以下功能。
+打开edge浏览器，使用YanfengAutoWork.py中的PLMLogin函数登陆后，在登陆后的页面中继续以下操作：
+点击title='XSO & PKR'的div，实现跳转
+定位到id="iframeContent"，展开//span[text()='PKR Management']/parent::a元素，
+点击//span[text()='Program PKR Summary']/parent::a元素
+定位到class="iframe_tab_menu-2-2"的iframe中，在这个iframe中执行以下操作：
+对所有表格中PKR列为空的数据的Project ID进行循环，循环体开始：
+定位id="searchProject"的input框，输入当前循环的Project ID
+点击onclick="searchproject()"的button。
+点击class="lbl"的span
+在当前class="iframe_tab_menu-2-2"的iframe中，如果能够搜索到“uzhak052”字符串，比如：<td role="gridcell" style="" title="uzhak052" aria-describedby="result-table_user_id">，则在当前Project ID对应的“PKR”列，填充“赵凯亮”；如果能够搜索到“uluxg004”字符串，比如：<td role="gridcell" style="" title="uluxg004" aria-describedby="result-table_user_id">，则在当前Project ID对应的“PKR”列，填充“路公超”；否则，则在当前Project ID对应的“PKR”列，填充“未知”。
+循环结束。
+

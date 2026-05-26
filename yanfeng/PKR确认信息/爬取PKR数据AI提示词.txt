@@ -20,6 +20,11 @@
 在df1表格中，增加一列，列名为"当前状态"，如果Phase 1 Gate Exit-GO的日期在当前周或下周，则"当前状态"填入Phase 1 Gate Exit-GO；如果Phase 2 Gate Exit-DVR的日期在当前周或下周，则"当前状态"填入Phase 2 Gate Exit-DVR；如果Phase 3 Gate Exit-FPR的日期在当前周或下周，则"当前状态"填入Phase 3 Gate Exit-FPR；如果Phase 4 Gate Exit-CPA的日期在当前周或下周，则"当前状态"填入Phase 4 Gate Exit-CPA；
 在df1表格中，再增加一列，列名为"PKR信息"
 
+导入Project_List表格后，完成筛选出Category是"S"，且Phase 1 Gate Exit-GO，Phase 2 Gate Exit-DVR，Phase 3 Gate Exit-FPR，Phase 4 Gate Exit-CPA日期在本周和下周内的数据，放到df1中后，读取PKR数据爬取.py所在目录中“\PKR确认信息\PKR历史未完成记录.xlsx”，如果存在“PKR历史未完成记录.xlsx”中Project ID不存在于df1的数据，则把这些数据的Project ID放到一个列表中，依次调取这个列表中的Project ID在Project_List对应的Project ID数据，并添加到df1中。
+
+在导出excel和发邮件之前，查找并删除df1中，“当前状态”列为“Phase 1 Gate Exit-GO”的“Phase 1 Gate Exit-GO”列的日期在下周日之后的数据（不包括下周日）；“当前状态”列为“Phase 2 Gate Exit-DVR”的“Phase 2 Gate Exit-DVR”列的日期在下周日之后的数据（不包括下周日）；“当前状态”列为“Phase 3 Gate Exit-FPR”的“Phase 3 Gate Exit-FPR”列的日期在下周日之后的数据（不包括下周日）；“当前状态”列为“Phase 4 Gate Exit-CPA”的“Phase 4 Gate Exit-CPA”列的日期在下周日之后的数据（不包括下周日）
+在管理PKR历史未完成记录（导出“PKR历史未完成记录.xlsx”前）的代码中，查找df1中，“是否确认”列为非“完成确认”和非空的数据。并把这些数据全部导出并替换现有“PKR历史未完成记录.xlsx”。
+
 回到网页
 定位到id="iframeContent"，展开//span[text()='PKR Management']/parent::a元素，
 点击//span[text()='Program PKR Summary']/parent::a元素

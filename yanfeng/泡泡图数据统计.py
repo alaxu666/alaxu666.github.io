@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from difflib import SequenceMatcher
 from config_loader import get_config_path
+from YanfengAutoWork import setup_driver, PLMLogin, DL_Project_List, FindEBPLeader
 
 import pandas as pd
 from selenium import webdriver
@@ -18,8 +19,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.edge.service import Service as EdgeService
+from selenium.webdriver.edge.options import Options as EdgeOptions
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
-from webdriver_manager.chrome import ChromeDriverManager
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
@@ -89,24 +91,6 @@ PKR_PASSWORD = getattr(config_module, 'PKR_PASSWORD', getattr(config_module, 'PA
 EBP_LOGIN_URL = getattr(config_module, 'EBP_LOGIN_URL', CONFIG_KEYS['EBP_LOGIN_URL'])
 EBP_USERNAME = getattr(config_module, 'EBP_USERNAME', CONFIG_KEYS['EBP_USERNAME'])
 EBP_PASSWORD = getattr(config_module, 'EBP_PASSWORD', CONFIG_KEYS['EBP_PASSWORD'])
-
-pkr_path = os.path.join(script_dir, 'PKR数据爬取.py')
-if not os.path.exists(pkr_path):
-    raise FileNotFoundError(f'未找到PKR数据爬取脚本: {pkr_path}')
-pkr_spec = importlib.util.spec_from_file_location('pkr_data_crawler', pkr_path)
-pkr_module = importlib.util.module_from_spec(pkr_spec)
-pkr_spec.loader.exec_module(pkr_module)
-
-for key, value in {
-    'LOGIN_URL': PKR_LOGIN_URL,
-    'USERNAME': PKR_USERNAME,
-    'PASSWORD': PKR_PASSWORD
-}.items():
-    if hasattr(pkr_module, key):
-        setattr(pkr_module, key, value)
-
-PKRDataCrawler = pkr_module.PKRDataCrawler
-
 
 def parse_month_input(text: str) -> datetime:
     text = str(text).strip()
@@ -216,7 +200,10 @@ def update_from_history(dfPPT: pd.DataFrame, dfLS: pd.DataFrame) -> pd.DataFrame
                     empty_mask = target_series.isna() | (target_series.astype(str).str.strip() == '')
                     if not empty_mask.any():
                         continue
-                    dfPPT.loc[mask & empty_mask, col] = values[col]
+                    val = values[col]
+                    if pd.isna(val):
+                        continue
+                    dfPPT.loc[mask & empty_mask, col] = val
     return dfPPT
 
 
@@ -263,7 +250,7 @@ def compute_weeks_after_gate(dfPPT: pd.DataFrame) -> pd.DataFrame:
             if pd.isna(a) or pd.isna(b):
                 return None
             weeks = (b - a).days / 7.0
-            return round(weeks, 2)
+            return round(weeks)
         df['Max weeks after gate'] = df.apply(calc, axis=1)
     return df
 
@@ -299,21 +286,48 @@ def find_local_edge_driver() -> str | None:
     return None
 
 
-def build_edge_driver() -> webdriver.Chrome:
-    options = webdriver.ChromeOptions()
-    options.add_argument('--ignore-certificate-errors')
-    options.add_argument('--incognito')
-    driver_path = None
-    try:
-        driver_path = ChromeDriverManager().install()
-    except Exception as ex:
-        raise RuntimeError(
-            f'无法下载ChromeDriver。原始错误: {ex}'
-        ) from ex
+def build_edge_driver():
+    """设置Edge浏览器（与YanfengAutoWork保持一致）"""
+    from config_loader import load_config_module
+    config = load_config_module()
 
-    service = webdriver.chrome.service.Service(driver_path)
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.maximize_window()
+    edge_options = EdgeOptions()
+    edge_options.add_argument('--ignore-certificate-errors')
+    edge_options.add_argument('--incognito')
+    edge_options.add_argument('--start-maximized')
+    edge_options.add_argument('--disable-gpu')
+    edge_options.add_argument('--no-sandbox')
+    edge_options.add_argument('--disable-dev-shm-usage')
+
+    try:
+        edge_service = EdgeService(EdgeChromiumDriverManager().install())
+    except Exception as e:
+        print(f"EdgeDriverManager下载失败: {e}")
+        print("尝试使用本地EdgeDriver...")
+        try:
+            possible_paths = [
+                'msedgedriver.exe',
+                r'C:\edgedriver\msedgedriver.exe',
+                r'C:\Program Files\edgedriver\msedgedriver.exe',
+                r'C:\Windows\msedgedriver.exe'
+            ]
+            driver_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    driver_path = path
+                    break
+            if driver_path:
+                print(f"找到本地EdgeDriver: {driver_path}")
+                edge_service = EdgeService(driver_path)
+            else:
+                print("未找到本地EdgeDriver，让Selenium自动查找...")
+                edge_service = EdgeService()
+        except Exception as local_e:
+            print(f"本地EdgeDriver也失败: {local_e}")
+            raise Exception("无法初始化EdgeDriver，请确保已安装Edge浏览器")
+
+    driver = webdriver.Edge(service=edge_service, options=edge_options)
+    print("成功初始化Edge浏览器（EBP专用）")
     return driver
 
 
@@ -621,8 +635,19 @@ def refresh_history(dfPPT: pd.DataFrame, dfLS: pd.DataFrame) -> pd.DataFrame:
     return combined
 
 
+def convert_datetime_to_short_date(df: pd.DataFrame) -> pd.DataFrame:
+    """将Design_release和Phase 3 Gate Exit-FPR列转换为短日期字符串(YYYY-MM-DD)"""
+    df = df.copy()
+    date_columns = ['Design_release', 'Phase 3 Gate Exit-FPR']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
+    return df
+
+
 def save_dataframe(df: pd.DataFrame, path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    df = convert_datetime_to_short_date(df)
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -644,23 +669,210 @@ def save_dataframe(df: pd.DataFrame, path: str):
                 print("请手动将临时文件复制到目标位置并关闭Excel程序。")
 
 
+def fill_missing_ebp_leader(dfPPT: pd.DataFrame) -> pd.DataFrame:
+    """使用FindEBPLeader函数补充EBP Leader空值"""
+    try:
+        empty_ebp_mask = dfPPT['EBP Leader'].isna() | (dfPPT['EBP Leader'].astype(str).str.strip() == '')
+        empty_count = empty_ebp_mask.sum()
+
+        if empty_count == 0:
+            print("EBP Leader列无空值，无需补充")
+            return dfPPT
+
+        print(f"发现{empty_count}行EBP Leader为空的数据，准备从PLM系统获取...")
+
+        project_id_list = dfPPT.loc[empty_ebp_mask, 'Project ID'].tolist()
+        print(f"需要查询的Project ID: {project_id_list}")
+
+        driver, wait = setup_driver()
+        try:
+            PLMLogin(driver, wait)
+            ebp_leader_df = FindEBPLeader(driver, wait, project_id_list)
+
+            for _, row in ebp_leader_df.iterrows():
+                project_id = str(row['Project ID']).strip()
+                ebp_leader = str(row['EBP Leader']).strip() if pd.notna(row['EBP Leader']) else ''
+
+                if ebp_leader:
+                    mask = dfPPT['Project ID'].astype(str).str.strip() == project_id
+                    if mask.any():
+                        dfPPT['EBP Leader'] = dfPPT['EBP Leader'].astype(object)
+                        dfPPT.loc[mask, 'EBP Leader'] = ebp_leader
+                        print(f"  已更新Project ID {project_id}的EBP Leader: {ebp_leader}")
+        finally:
+            if driver:
+                driver.quit()
+
+        remaining_empty = (dfPPT['EBP Leader'].isna() | (dfPPT['EBP Leader'].astype(str).str.strip() == '')).sum()
+        print(f"EBP Leader补充完成，剩余{remaining_empty}行空值")
+        return dfPPT
+
+    except Exception as e:
+        print(f"补充EBP Leader过程中出现错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return dfPPT
+
+
+def fill_missing_pkr(dfPPT: pd.DataFrame) -> pd.DataFrame:
+    """查找项目机械专家(PKR)并填充到dfPPT的PKR列"""
+    try:
+        # 检查是否有PKR为空的数据
+        if 'PKR' not in dfPPT.columns:
+            print("dfPPT中无PKR列，跳过PKR补充")
+            return dfPPT
+
+        empty_pkr_mask = dfPPT['PKR'].isna() | (dfPPT['PKR'].astype(str).str.strip() == '')
+        empty_count = empty_pkr_mask.sum()
+
+        if empty_count == 0:
+            print("PKR列无空值，无需补充")
+            return dfPPT
+
+        print(f"发现{empty_count}行PKR为空的数据，准备从PLM系统获取...")
+
+        # 创建PLM driver并登录
+        driver, wait = setup_driver()
+        try:
+            PLMLogin(driver, wait)
+
+            # 1. 点击 title='XSO & PKR' 的 div
+            xso_pkr_div = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'div[title="XSO & PKR"]'))
+            )
+            xso_pkr_div.click()
+            print("已点击 XSO & PKR")
+            time.sleep(2)
+
+            # 2. 定位到 id="iframeContent" 的 iframe 并切换
+            iframe_content = wait.until(
+                EC.presence_of_element_located((By.ID, 'iframeContent'))
+            )
+            driver.switch_to.frame(iframe_content)
+            print("已切换到 iframeContent")
+
+            # 3. 展开 PKR Management
+            pkr_mgmt_a = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//span[text()='PKR Management']/parent::a"))
+            )
+            pkr_mgmt_a.click()
+            print("已展开 PKR Management")
+            time.sleep(1)
+
+            # 4. 点击 Program PKR Summary
+            pkr_summary_a = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//span[text()='Program PKR Summary']/parent::a"))
+            )
+            pkr_summary_a.click()
+            print("已点击 Program PKR Summary")
+            time.sleep(2)
+
+            # 5. 定位到 class="iframe_tab_menu-2-2" 的 iframe 并切换
+            inner_iframe = wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe.iframe_tab_menu-2-2'))
+            )
+            driver.switch_to.frame(inner_iframe)
+            print("已切换到 iframe_tab_menu-2-2")
+
+            # 6. 循环处理每个PKR为空的Project ID
+            project_id_list = dfPPT.loc[empty_pkr_mask, 'Project ID'].tolist()
+            print(f"需要查询PKR的Project ID: {project_id_list}")
+
+            for pid in project_id_list:
+                pid_str = str(pid).strip()
+                print(f"正在查询 Project ID: {pid_str} 的PKR...")
+
+                try:
+                    # 定位 searchProject 输入框并输入
+                    search_input = wait.until(
+                        EC.presence_of_element_located((By.ID, 'searchProject'))
+                    )
+                    search_input.clear()
+                    search_input.send_keys(pid_str)
+                    print(f"  已输入 Project ID: {pid_str}")
+
+                    # 点击搜索按钮
+                    search_btn = driver.find_element(By.CSS_SELECTOR, 'button[onclick="searchproject()"]')
+                    search_btn.click()
+                    print("  已点击搜索按钮")
+                    time.sleep(2)
+
+                    # 用JS点击 class="lbl" 的 span（避免被radio遮挡导致click intercepted）
+                    lbl_span = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'span.lbl'))
+                    )
+                    driver.execute_script("arguments[0].click();", lbl_span)
+                    print("  已点击 lbl span")
+                    time.sleep(2)
+
+                    # 在展开的表格中精确查找 td title 属性
+                    pkr_value = '未知'
+                    try:
+                        uzhak_td = driver.find_element(
+                            By.CSS_SELECTOR, 'td[title="uzhak052"][aria-describedby*="user_id"]'
+                        )
+                        if uzhak_td:
+                            pkr_value = '赵凯亮'
+                    except NoSuchElementException:
+                        try:
+                            uluxg_td = driver.find_element(
+                                By.CSS_SELECTOR, 'td[title="uluxg004"][aria-describedby*="user_id"]'
+                            )
+                            if uluxg_td:
+                                pkr_value = '路公超'
+                        except NoSuchElementException:
+                            pkr_value = '未知'
+
+                    # 更新dfPPT中的PKR列
+                    mask = dfPPT['Project ID'].astype(str).str.strip() == pid_str
+                    if mask.any():
+                        dfPPT['PKR'] = dfPPT['PKR'].astype(object)
+                        dfPPT.loc[mask, 'PKR'] = pkr_value
+                        print(f"  Project ID {pid_str} 的PKR已填充: {pkr_value}")
+
+                except Exception as e:
+                    print(f"  查询 Project ID {pid_str} 的PKR时出错: {e}")
+                    # 填充未知
+                    mask = dfPPT['Project ID'].astype(str).str.strip() == pid_str
+                    if mask.any():
+                        dfPPT['PKR'] = dfPPT['PKR'].astype(object)
+                        dfPPT.loc[mask, 'PKR'] = '未知'
+                    continue
+
+            # 切回主文档
+            driver.switch_to.default_content()
+
+        finally:
+            if driver:
+                driver.quit()
+
+        remaining_empty = (dfPPT['PKR'].isna() | (dfPPT['PKR'].astype(str).str.strip() == '')).sum()
+        print(f"PKR补充完成，剩余{remaining_empty}行空值")
+        return dfPPT
+
+    except Exception as e:
+        print(f"补充PKR过程中出现错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return dfPPT
+
+
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     month_input = input('请输入要统计的月份，例如2605：').strip()
     Month = parse_month_input(month_input)
     print(f'统计月份：{Month.strftime("%Y-%m")}')
 
-    crawler = PKRDataCrawler()
+    driver, wait = setup_driver(DOWNLOAD_DIR)
     try:
-        crawler.setup_driver()
-        crawler.login()
-        crawler.navigate_to_xso_management()
-        crawler.download_xso_data()
+        PLMLogin(driver, wait)
+        download_file = DL_Project_List(driver, wait, DOWNLOAD_DIR)
+        print(f"Project_List下载完成: {download_file}")
     finally:
-        if crawler.driver:
-            crawler.driver.quit()
+        if driver:
+            driver.quit()
 
-    project_list_file = get_latest_project_list_file(DOWNLOAD_DIR)
+    project_list_file = download_file
     df_project_list = pd.read_excel(project_list_file)
     dfPhase3 = filter_phase3_by_month(df_project_list, Month)
 
@@ -677,6 +889,12 @@ def main():
 
     if dfPPT['Formal EQU'].isna().any() or (dfPPT['Formal EQU'].astype(str).str.strip() == '').any():
         dfPPT = fetch_formal_equ_from_ebp(dfPPT)
+
+    # 补充EBP Leader空值
+    dfPPT = fill_missing_ebp_leader(dfPPT)
+
+    # 补充PKR空值（项目机械专家）
+    dfPPT = fill_missing_pkr(dfPPT)
 
     dfLS_updated = refresh_history(dfPPT, dfLS)
     save_dataframe(dfLS_updated, dfLS_path)

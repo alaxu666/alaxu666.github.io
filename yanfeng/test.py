@@ -1,112 +1,121 @@
-import re
-import pandas as pd
-import akshare as ak
-from datetime import datetime
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+SMTP邮件发送测试脚本
+功能：测试发件邮箱的SMTP配置是否正确，能否成功发送邮件
+使用方法：修改下方的邮件配置，然后运行此脚本
+"""
 
-def extract_stock_code(text):
-    """
-    从文本中提取股票代码，并补全为6位数字。
-    支持格式：
-        - '招商银行 (600036)'  → 600036
-        - '中大力德-2896'      → 002896（补零到6位）
-        - '双环传动-2472'      → 002472
-        - '600036'            → 600036
-    """
-    # 先尝试匹配6位数字
-    match = re.search(r'\b(\d{6})\b', str(text))
-    if match:
-        return match.group(1)
-    # 再尝试匹配4位数字（常见于深市）
-    match = re.search(r'\b(\d{4})\b', str(text))
-    if match:
-        code4 = match.group(1)
-        # 补零到6位：深市通常为 000、002、300 开头，这里简单前面加 '00'
-        return '00' + code4
-    # 可选：匹配3位数字（如2050 → 002050）
-    match = re.search(r'\b(\d{3})\b', str(text))
-    if match:
-        code3 = match.group(1)
-        return '00' + code3
-    return None
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import sys
 
-def get_realtime_price_akshare(code):
-    """
-    通过 AkShare 获取实时股价（最新价）
-    返回 float 类型股价，失败返回 None
-    """
+# ==================== 请修改以下配置 ====================
+SMTP_SERVER = "smtp.office365.com"      # SMTP服务器地址
+SMTP_PORT = 587                          # 端口（TLS通常为587）
+SENDER_EMAIL = "shirong.xu@yanfeng.com"   # 发件人邮箱
+SENDER_PASSWORD = "2045O2O5-7"    # 密码或应用专用密码
+RECIPIENT_EMAIL = "shirong.xu@yanfeng.com"     # 测试收件人邮箱（可以填自己的邮箱）
+# =======================================================
+
+def send_test_email():
+    """发送一封简单的测试邮件"""
     try:
-        # 获取沪深京A股实时行情（东方财富数据源）
-        df = ak.stock_zh_a_spot_em()
-        # 筛选目标代码
-        row = df[df['代码'] == code]
-        if not row.empty:
-            # 最新价列名通常为 '最新价'
-            price = float(row['最新价'].values[0])
-            return price
-        else:
-            print(f"  未找到代码 {code} 的行情数据")
-            return None
-    except Exception as e:
-        print(f"  AkShare 请求失败: {e}")
-        return None
+        # 创建邮件内容
+        subject = "SMTP测试邮件 - 来自Python脚本"
+        body = """
+        您好！
 
-def is_trading_time():
-    """简单判断是否在交易时段（周一至周五 9:30-11:30, 13:00-15:00）"""
-    now = datetime.now()
-    if now.weekday() >= 5:  # 周六周日
-        return False
-    current_time = now.time()
-    morning_start = datetime.strptime("09:30", "%H:%M").time()
-    morning_end = datetime.strptime("11:30", "%H:%M").time()
-    afternoon_start = datetime.strptime("13:00", "%H:%M").time()
-    afternoon_end = datetime.strptime("15:00", "%H:%M").time()
-    if (morning_start <= current_time <= morning_end) or (afternoon_start <= current_time <= afternoon_end):
+        这是一封通过 Python smtplib 发送的测试邮件。
+        如果您收到了这封邮件，说明您的 SMTP 配置正确，可以用于自动发送邮件功能。
+
+        发送时间: 测试运行时刻
+        发件服务器: {}
+        
+        祝好！
+        """.format(SMTP_SERVER)
+
+        # 构造 MIME 邮件
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['Subject'] = subject
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = RECIPIENT_EMAIL
+
+        # 连接服务器并发送
+        print(f"正在连接 SMTP 服务器 {SMTP_SERVER}:{SMTP_PORT} ...")
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()  # 启用 TLS 加密
+        print("已建立 TLS 连接")
+
+        print("正在登录...")
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        print("登录成功")
+
+        print("正在发送邮件...")
+        server.send_message(msg)
+        server.quit()
+
+        print("=" * 50)
+        print("✅ 邮件发送成功！")
+        print(f"   发件人: {SENDER_EMAIL}")
+        print(f"   收件人: {RECIPIENT_EMAIL}")
+        print(f"   主题: {subject}")
+        print("=" * 50)
         return True
-    return False
+
+    except smtplib.SMTPAuthenticationError:
+        print("❌ 认证失败：用户名或密码错误")
+        print("   提示：如果使用企业邮箱（如 Office 365），可能需要使用“应用专用密码”")
+        return False
+    except smtplib.SMTPConnectError:
+        print("❌ 连接服务器失败，请检查 SMTP_SERVER 和 SMTP_PORT 是否正确")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"❌ SMTP 错误: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ 未知错误: {e}")
+        return False
 
 def main():
-    file_path = r'C:\XSR\实用信息\选股.xlsx'
-    
-    # 提示交易时间
-    if not is_trading_time():
-        print("警告：当前不是A股交易时段（9:30-11:30, 13:00-15:00），获取的价格可能为昨日收盘价或无效。")
-    
-    try:
-        df = pd.read_excel(file_path, dtype={'公司名称 (代码)': str})
-    except Exception as e:
-        print(f"读取文件失败: {e}")
-        return
+    print("=" * 50)
+    print("SMTP 邮件发送测试工具")
+    print("=" * 50)
+    print("当前配置:")
+    print(f"  SMTP_SERVER   = {SMTP_SERVER}")
+    print(f"  SMTP_PORT     = {SMTP_PORT}")
+    print(f"  SENDER_EMAIL  = {SENDER_EMAIL}")
+    print(f"  RECIPIENT_EMAIL = {RECIPIENT_EMAIL}")
+    print("-" * 50)
 
-    code_col = '公司名称 (代码)'
-    price_col = '当前股价'
-    if code_col not in df.columns:
-        print(f"错误：Excel中缺少 '{code_col}' 列")
-        return
-    if price_col not in df.columns:
-        df[price_col] = None
+    # 简单检查配置是否被修改
+    if SENDER_EMAIL == "your.name@yanfeng.com" or "your_" in SENDER_EMAIL:
+        print("⚠️ 警告：您尚未修改发件人邮箱配置！")
+        print("   请先编辑脚本开头的 SMTP_SERVER、SENDER_EMAIL、SENDER_PASSWORD 等变量")
+        confirm = input("   是否仍要继续测试？(y/N): ")
+        if confirm.lower() != 'y':
+            print("测试已取消")
+            sys.exit(0)
 
-    # 遍历每一行
-    for idx, row in df.iterrows():
-        raw_text = row[code_col]
-        stock_code = extract_stock_code(raw_text)
-        if not stock_code:
-            print(f"第 {idx+2} 行无法提取股票代码：'{raw_text}'，跳过")
-            continue
-        
-        print(f"正在获取 {stock_code} ({raw_text}) ...")
-        price = get_realtime_price_akshare(stock_code)
-        if price is not None:
-            df.at[idx, price_col] = price
-            print(f"  -> 成功: {price}")
-        else:
-            print(f"  -> 获取失败，保持原值")
+    if SENDER_PASSWORD == "your_app_password":
+        print("⚠️ 警告：密码仍为默认值，请填写真实密码")
+        confirm = input("   是否仍要继续测试？(y/N): ")
+        if confirm.lower() != 'y':
+            print("测试已取消")
+            sys.exit(0)
 
-    # 保存回原文件
-    try:
-        df.to_excel(file_path, index=False)
-        print(f"更新完成，已保存至 {file_path}")
-    except Exception as e:
-        print(f"保存文件失败: {e}")
+    success = send_test_email()
+    if not success:
+        print("\n建议：")
+        print("1. 确认密码是否正确（部分邮箱需使用“应用专用密码”）")
+        print("2. 确认 SMTP 服务器地址和端口是否正确")
+        print("3. 确认网络是否可以访问该 SMTP 服务器")
+        print("4. 尝试使用 telnet 或 ping 测试连通性")
+        sys.exit(1)
+    else:
+        print("\n测试通过！可以继续使用自动邮件发送功能。")
+        sys.exit(0)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
