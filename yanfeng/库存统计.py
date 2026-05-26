@@ -126,6 +126,8 @@ def extract_task_code(value):
     if pd.isna(value):
         return None
     s = str(value).strip()
+    if not s or s == 'nan':
+        return None
     # 匹配：6位数字开头，后面只能跟非英文字母字符（数字、符号、空格等），不能跟英文字母
     m = re.match(r'^(\d{6})([^a-zA-Z]*)$', s)
     return m.group(1) if m else None
@@ -159,10 +161,10 @@ def extract_middle_text(project_name):
 Lq = []
 # 从dfTK_ZJ中提取6位任务号
 if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
-    Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+    Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code and isinstance(code, str)]
 # 从dfXM_ZJ中也提取6位任务号
 if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
-    Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+    Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code and isinstance(code, str)]
     Lq.extend(Lq_xm)
 # 去重
 Lq = list(set(Lq))
@@ -218,8 +220,11 @@ if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
                 return f"{code}-{suffix}"
             return value
 
-        # 只对dfTK_ZJ应用替换
-        dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+        # 对dfTK_ZJ和dfXM_ZJ都应用替换
+        if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
+            dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+        if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+            dfXM_ZJ["项目名"] = dfXM_ZJ["项目名"].astype(str).apply(replace_project_name)
 else:
     if dfProject_List.empty and Lq:
         print("警告：dfProject_List 为空，无法执行任务书编号匹配")
