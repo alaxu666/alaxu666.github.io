@@ -119,25 +119,57 @@ if not dfTK_ZJ.empty:
     mask_tk = dfTK_ZJ["项目名"].apply(starts_with_6_digits)
     dfTK_ZJ = dfTK_ZJ.loc[mask_tk]
 
-# 追加功能：从dfTK_ZJ中提取6位任务号到Lq，并用最新Project_List文件匹配后更新项目名
+# 追加功能：从dfTK_ZJ和dfXM_ZJ中提取6位任务号到Lq，并用最新Project_List文件匹配后更新项目名
+
+def extract_task_code(value):
+    """提取项目名中的6位任务号：只有6位数字+非英文字母字符组成的字符串（如'250055'或'250055-- '）"""
+    if pd.isna(value):
+        return None
+    s = str(value).strip()
+    # 匹配：6位数字开头，后面只能跟非英文字母字符（数字、符号、空格等），不能跟英文字母
+    m = re.match(r'^(\d{6})([^a-zA-Z]*)$', s)
+    return m.group(1) if m else None
+
+
+def extract_task_number(project_name):
+    """从Project Name中提取任务书编号：第4个','后面的文本中的6个连续数字"""
+    if pd.isna(project_name):
+        return ""
+    text = str(project_name)
+    # 按逗号分割，最多分5段，取第4个逗号后面的部分（即第5段）
+    parts = text.split(",", 4)
+    if len(parts) < 5:
+        return ""
+    tail = parts[4]
+    match = re.search(r"(\d{6})", tail)
+    return match.group(1) if match else ""
+
+
+def extract_middle_text(project_name):
+    """从Project Name中提取第2个','和第5个','之间的文本（不包括这两个','）"""
+    if pd.isna(project_name):
+        return ""
+    parts = str(project_name).split(",")
+    if len(parts) < 5:
+        return ""
+    # 第2个','后 = index 2，第5个','前 = index 4（不包括第5个','本身）
+    return ",".join(parts[2:5]).strip()
+
+
 Lq = []
+# 从dfTK_ZJ中提取6位任务号
 if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
-    def extract_task_code(value):
-        if pd.isna(value):
-            return None
-        s = str(value).strip()
-        # 匹配只有6位数字或6位数字+'-'的情况
-        m = re.match(r'^(\d{6})-?$', s)
-        return m.group(1) if m else None
-
-    # 从dfTK_ZJ和dfXM_ZJ中都提取任务号
     Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code]
-    if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
-        Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code]
-        Lq.extend(Lq_xm)
-    # 去重
-    Lq = list(set(Lq))
+# 从dfXM_ZJ中也提取6位任务号
+if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+    Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code]
+    Lq.extend(Lq_xm)
+# 去重
+Lq = list(set(Lq))
+print(f"Lq列表（6位任务号）: {Lq}")
 
+dfProject_List = pd.DataFrame()
+if Lq:
     try:
         config = load_config_module()
         download_dir = config.DOWNLOAD_DIR
@@ -145,7 +177,6 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
         download_dir = None
         print(f"读取 config.py 失败: {e}")
 
-    dfProject_List = pd.DataFrame()
     if download_dir:
         project_files = glob.glob(os.path.join(download_dir, "Project_List*.xls*"))
         if project_files:
@@ -158,64 +189,42 @@ if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
         else:
             print(f"警告：在下载目录未找到 Project_List 文件：{download_dir}")
 
-    if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
-        def extract_task_number(project_name):
-            if pd.isna(project_name):
-                return ""
-            text = str(project_name)
-            parts = text.split(",", 4)
-            if len(parts) < 5:
-                return ""
-            tail = parts[4]
-            match = re.search(r"(\d{6})", tail)
-            return match.group(1) if match else ""
+if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
+    # 新增"任务书编号"列
+    dfProject_List["任务书编号"] = dfProject_List["Project Name"].apply(extract_task_number).astype(str)
 
-        def extract_middle_text(project_name):
-            if pd.isna(project_name):
-                return ""
-            parts = str(project_name).split(",")
-            if len(parts) < 5:
-                return ""
-            return ",".join(parts[2:5]).strip()
+    # 构建任务书编号到中间文本的映射
+    task_map = {}
+    for _, row in dfProject_List.iterrows():
+        task_no = str(row.get("任务书编号", "")).strip()
+        if not task_no:
+            continue
+        middle = extract_middle_text(row.get("Project Name", ""))
+        if task_no not in task_map:
+            task_map[task_no] = middle
 
-        dfProject_List["任务书编号"] = dfProject_List["Project Name"].apply(extract_task_number).astype(str)
+    print(f"任务书编号映射: {task_map}")
 
-        # 构建任务书编号到 Project Name 中间文本的映射
-        task_map = {}
-        for _, row in dfProject_List.iterrows():
-            task_no = str(row.get("任务书编号", "")).strip()
-            if not task_no:
-                continue
-            suffix = extract_middle_text(row.get("Project Name", ""))
-            if not suffix:
-                continue
-            # 如果已有映射且旧值为空，则更新；否则保持第一个有效映射
-            current = task_map.get(task_no, "")
-            if not current:
-                task_map[task_no] = suffix
-
-        if task_map:
-            def replace_project_name(value):
-                if pd.isna(value):
-                    return value
-                code = extract_task_code(value)
-                if not code:
-                    return value
-                # 只有当任务号在Lq列表中且能在task_map中找到对应关系时才替换
-                if code in Lq and code in task_map:
-                    suffix = task_map[code]
-                    return f"{code}-{suffix}"
+    if task_map:
+        def replace_project_name(value):
+            if pd.isna(value):
                 return value
+            code = extract_task_code(value)
+            if not code:
+                return value
+            # 任务号在Lq中 且 在task_map中有对应
+            if code in Lq and code in task_map:
+                suffix = task_map[code]
+                return f"{code}-{suffix}"
+            return value
 
-            # 对dfTK_ZJ和dfXM_ZJ都应用替换
-            dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
-            if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
-                dfXM_ZJ["项目名"] = dfXM_ZJ["项目名"].astype(str).apply(replace_project_name)
-    else:
-        if dfProject_List.empty:
-            print("警告：dfProject_List 为空，无法执行任务书编号匹配")
-        else:
-            print("警告：Project_List 文件中缺少 'Project Name' 列，无法执行任务书编号匹配")
+        # 只对dfTK_ZJ应用替换
+        dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+else:
+    if dfProject_List.empty and Lq:
+        print("警告：dfProject_List 为空，无法执行任务书编号匹配")
+    elif "Project Name" not in dfProject_List.columns and Lq:
+        print("警告：Project_List 文件中缺少 'Project Name' 列，无法执行任务书编号匹配")
 
 # 排序
 if not dfXM_ZJ.empty and '领用总价' in dfXM_ZJ.columns:
