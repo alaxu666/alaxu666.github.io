@@ -15,6 +15,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
@@ -473,11 +474,25 @@ def FindEBPLeader(driver, wait, project_id_list):
         driver.switch_to.default_content()
         time.sleep(PAGE_LOAD_WAIT_TIME)
 
+        # 检查是否已在 XSO Management 页面，若不在则先点击跳转
+        try:
+            driver.find_element(By.XPATH, '//span[@class="menu-text" and text()="XSO Management"]')
+            print("当前已在 XSO Management 页面")
+        except NoSuchElementException:
+            print("当前不在 XSO Management 页面，尝试点击 XSO & PKR 跳转...")
+            try:
+                xso_pkr_div = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div[title="XSO & PKR"]')))
+                xso_pkr_div.click()
+                print("已点击 XSO & PKR")
+                time.sleep(PAGE_LOAD_WAIT_TIME)
+            except Exception as nav_e:
+                print(f"点击 XSO & PKR 失败: {nav_e}")
+
         iframe_content = wait.until(EC.presence_of_element_located((By.ID, "iframeContent")))
         driver.switch_to.frame(iframe_content)
         print("已切换到 iframeContent")
 
-        # 展开 XSO Management（同原逻辑，省略重复注释）
+        # 展开 XSO Management
         try:
             menu_item = wait.until(EC.presence_of_element_located((By.ID, "menu-1")))
             if "open" in menu_item.get_attribute("class").split():

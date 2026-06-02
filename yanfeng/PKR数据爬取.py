@@ -308,7 +308,7 @@ class PKRDataCrawler:
             print(f"已读取Excel文件，共{len(df)}行数据")
 
             # 获取当前日期和本周、下周的日期范围
-            today = datetime.now()
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             current_week_start = today - timedelta(days=today.weekday())
             current_week_end = current_week_start + timedelta(days=6)
             next_week_start = current_week_start + timedelta(days=7)
@@ -828,7 +828,7 @@ class PKRDataCrawler:
     # ==================== 新增：删除超过下周日的 Phase 数据 ====================
     def remove_phases_beyond_next_sunday(self, df1):
         """删除当前状态对应的 Gate Exit 日期在下周日之后的行（不包含下周日）"""
-        today = datetime.now()
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         # 计算下周日：本周日 + 7天
         current_sunday = today + timedelta(days=(6 - today.weekday()))
         next_sunday = current_sunday + timedelta(days=7)
@@ -919,7 +919,7 @@ class PKRDataCrawler:
             print("正在添加过门周信息...")
 
             # 获取当前日期和本周、下周的日期范围
-            today = datetime.now()
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             current_week_start = today - timedelta(days=today.weekday())
             current_week_end = current_week_start + timedelta(days=6)
             next_week_start = current_week_start + timedelta(days=7)
@@ -959,8 +959,21 @@ class PKRDataCrawler:
             print(f"添加过门周信息过程中出现错误: {e}")
             return df1
 
+    @staticmethod
+    def _format_date_columns(df):
+        """将 DataFrame 中所有日期/时间列转换为短日期字符串（YYYY-MM-DD），不修改原 DataFrame。"""
+        df = df.copy()
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.strftime('%Y-%m-%d')
+                # NaT 会被格式化为 NaN，替换为空字符串
+                df[col] = df[col].fillna('')
+        return df
+
     def save_excel_with_retry(self, df, file_path, **kwargs):
-        """尝试保存 Excel 文件，遇到文件锁定时提示用户关闭文件后重试。"""
+        """尝试保存 Excel 文件，遇到文件锁定时提示用户关闭文件后重试。
+        导出前自动将所有日期/时间列格式化为短日期（YYYY-MM-DD）。"""
+        df = self._format_date_columns(df)
         while True:
             try:
                 df.to_excel(file_path, **kwargs)
@@ -1148,7 +1161,7 @@ class PKRDataCrawler:
         """筛选Phase 1-4 Gate Exit日期在本周和下周末内的数据"""
         try:
             # 获取当前日期和本周、下周的日期范围
-            today = datetime.now()
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             current_week_start = today - timedelta(days=today.weekday())
             current_week_end = current_week_start + timedelta(days=6)
             next_week_start = current_week_start + timedelta(days=7)

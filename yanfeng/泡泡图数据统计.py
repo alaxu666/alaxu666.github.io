@@ -203,6 +203,9 @@ def update_from_history(dfPPT: pd.DataFrame, dfLS: pd.DataFrame) -> pd.DataFrame
                     val = values[col]
                     if pd.isna(val):
                         continue
+                    # 如果值是datetime类型而目标列是float，先转换列类型
+                    if isinstance(val, (datetime, pd.Timestamp)):
+                        dfPPT[col] = dfPPT[col].astype(object)
                     dfPPT.loc[mask & empty_mask, col] = val
     return dfPPT
 
@@ -641,7 +644,38 @@ def convert_datetime_to_short_date(df: pd.DataFrame) -> pd.DataFrame:
     date_columns = ['Design_release', 'Phase 3 Gate Exit-FPR']
     for col in date_columns:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
+            def format_date(val):
+                if pd.isna(val):
+                    return ''
+                # 已经是datetime类型
+                if isinstance(val, (datetime, pd.Timestamp)):
+                    return val.strftime('%Y-%m-%d')
+                # 处理float类型（如20260310.0）
+                if isinstance(val, float):
+                    if val == int(val):
+                        s = str(int(val))
+                    else:
+                        return val
+                else:
+                    s = str(val).strip()
+                # 去掉末尾可能的.0
+                if '.' in s:
+                    s = s.split('.')[0]
+                # 8位纯数字 YYYYMMDD
+                if re.match(r'^\d{8}$', s):
+                    try:
+                        return pd.to_datetime(s, format='%Y%m%d').strftime('%Y-%m-%d')
+                    except Exception:
+                        return s
+                # 已经是 YYYY-MM-DD 格式
+                if re.match(r'^\d{4}-\d{2}-\d{2}', s):
+                    return s[:10]
+                # 其他格式尝试通用解析
+                try:
+                    return pd.to_datetime(s).strftime('%Y-%m-%d')
+                except Exception:
+                    return s
+            df[col] = df[col].apply(format_date)
     return df
 
 
@@ -880,6 +914,31 @@ def main():
     dfLS_path = os.path.join(script_dir, '泡泡图DATA', '泡泡图历史数据.xlsx')
     dfPPT = pd.read_excel(dfPPT_path)
     dfLS = pd.read_excel(dfLS_path)
+
+    # 将Design_release列中的8位数字(YYYYMMDD)转换为日期格式
+    if 'Design_release' in dfPPT.columns:
+        def convert_8digit_date(val):
+            if pd.isna(val):
+                return val
+            # 处理float类型（如20260310.0）→ 先转整数
+            if isinstance(val, float):
+                if val == int(val):
+                    s = str(int(val))
+                else:
+                    return val
+            else:
+                s = str(val).strip()
+            # 去掉末尾可能的.0
+            if '.' in s:
+                s = s.split('.')[0]
+            if re.match(r'^\d{8}$', s):
+                try:
+                    return pd.to_datetime(s, format='%Y%m%d')
+                except Exception:
+                    return val
+            return val
+        dfPPT['Design_release'] = dfPPT['Design_release'].apply(convert_8digit_date)
+        print("已转换Design_release列中的8位数字日期格式")
 
     dfPPT = merge_phase3_into_ppt(dfPPT, dfPhase3)
     dfPPT = update_from_history(dfPPT, dfLS)
