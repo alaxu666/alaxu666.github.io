@@ -46,6 +46,9 @@ https://yanfeng.feishu.cn/base/VMSRbxAWGaElLosVgsbcp3wGnkc?table=tblI291iShjvSdW
 飞书API是：
 APP_ID = "cli_a977c868ecf95bc4"
 APP_SECRET = "7uqBTpzIcg6NPHzd9qVuDgM6cuRYM83f"
+用python读取飞书表格中的数据：
+飞书API和表格链接在工程目录下的“yanfeng”文件夹中config_DIR.py里面所指向的本地目录下的config.py文件中。在config.py中找到APP_ID = "app id"和APP_SECRET = "app secret"和TABLE_LINK = "表格链接地址"
+先提取表格中所有字段的类型，然后根据类型，然后提取表格中所有数据，再把数据原封不动的导出到“yanfeng”文件夹中的"人员.xlsx"
 
 用python提取飞书表格的所有数据，并导出到名为“成员”的excel文件中。
 表格地址：https://yanfeng.feishu.cn/base/VMSRbxAWGaElLosVgsbcp3wGnkc?table=tblAh3VxOIc4M2tf&view=vewPoKZnB0
@@ -58,3 +61,9 @@ APP_SECRET = "7uqBTpzIcg6NPHzd9qVuDgM6cuRYM83f"
 
 你是喷胶设备机械设计工程师，喷胶设备有人工上料工位，内部有一个协作机器人，机器人手臂上拿着喷胶枪，对塑料件进行喷胶作业。塑料件由人工放入设备，喷胶时，放件工位的门关闭。胶水溶剂为100%丙酮。设备内部全密闭。
 设备内部后墙（吸风口）和机器人之前有一个600宽的通道，给示教人员通行用，机器人和工件放在同一个台面上，台面离地高度1000mm左右，如果把吸风口设置在后墙，通道处，在台面下方，通道地面上方位置，上面做成封闭内壁，有问题吗？设备对安全性，防火防爆有什么要求？通风怎么设计？
+
+
+飞书API是：
+APP_ID = "cli_a977c868ecf95bc4"
+APP_SECRET = "7uqBTpzIcg6NPHzd9qVuDgM6cuRYM83f"
+读取yanfeng目录下的“设备安全_🧑🏻‍💻  成员.xlsx”，并把表格中“成员名”列中是“Xu,Shirong (Allan,Shanghai,CN)”对应的“账号”，填入到表格链接为：https://yanfeng.feishu.cn/base/VMSRbxAWGaElLosVgsbcp3wGnkc?table=tblI291iShjvSdWg&view=vew1Z9KtxU的表格中“Project ID”为“30034578”对应的“检查人”列中。
