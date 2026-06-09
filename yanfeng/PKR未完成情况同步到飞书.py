@@ -14,7 +14,9 @@ APP_SECRET = config.APP_SECRET
 APP_TOKEN = config.APP_TOKEN
 TABLE_ID = config.TABLE_ID
 VIEW_ID = config.VIEW_ID
-EXCEL_PATH = config.EXCEL_PATH
+# Excel 文件路径：与 PKR数据爬取.py 的 confirm_dir 保持一致
+_excel_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "PKR确认信息")
+EXCEL_PATH = os.path.join(_excel_dir, "PKR未完成情况（近两周）.xlsx")
 
 # ==================== 获取 token ====================
 def get_tenant_access_token(app_id, app_secret):
