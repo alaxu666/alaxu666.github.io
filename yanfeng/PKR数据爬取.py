@@ -1139,6 +1139,8 @@ class PKRDataCrawler:
             ebp_leader_df = FindEBPLeader(self.driver, self.wait, project_id_list)
 
             # 将获取到的EBP Leader信息更新到原始DataFrame
+            # 先将 EBP Leader 列转为 object 类型，避免 float64 无法赋值字符串
+            df1['EBP Leader'] = df1['EBP Leader'].astype(object)
             for _, row in ebp_leader_df.iterrows():
                 project_id = row['Project ID']
                 ebp_leader = row['EBP Leader']

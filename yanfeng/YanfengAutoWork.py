@@ -472,7 +472,7 @@ def FindEBPLeader(driver, wait, project_id_list):
         print("正在导航到 XSO Management 提取 EBP Leader 信息...")
 
         driver.switch_to.default_content()
-        time.sleep(PAGE_LOAD_WAIT_TIME)
+        time.sleep(PAGE_LOAD_WAIT_TIME * 2)
 
         # 检查是否已在 XSO Management 页面，若不在则先点击跳转
         try:
@@ -484,7 +484,7 @@ def FindEBPLeader(driver, wait, project_id_list):
                 xso_pkr_div = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div[title="XSO & PKR"]')))
                 xso_pkr_div.click()
                 print("已点击 XSO & PKR")
-                time.sleep(PAGE_LOAD_WAIT_TIME)
+                time.sleep(PAGE_LOAD_WAIT_TIME * 2)
             except Exception as nav_e:
                 print(f"点击 XSO & PKR 失败: {nav_e}")
 

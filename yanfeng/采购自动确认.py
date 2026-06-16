@@ -468,26 +468,118 @@ def PurchaseApplicationApproval(driver):
         # ---------- 执行自动审批 ----------
         AutomaticSupplierSelection(driver)
 
-        # ---------- 等待审批窗口自动关闭 ----------
+        # ---------- 等待审批结果，最多重试3次 ----------
         if new_window:
-            print("  等待 10 秒后返回主窗口...")
-            time.sleep(10)
+            # 新窗口模式：审批成功后窗口会自动关闭
+            max_retries = 3
+            approved = False
+            for attempt in range(1, max_retries + 1):
+                print(f"  等待审批结果... (第 {attempt}/{max_retries} 次，最多等10秒)")
+                # 每隔2秒检查一次窗口是否已关闭，累计等10秒
+                for i in range(5):
+                    time.sleep(2)
+                    # 检查审批窗口是否已关闭（窗口数量减少）
+                    if len(driver.window_handles) <= original_window_count:
+                        approved = True
+                        print("  ✅ 审批窗口已关闭，审批成功！")
+                        break
+                if approved:
+                    break
+                # 检查当前是否还在审批页面（可能窗口没关但页面变了）
+                try:
+                    current_handles = driver.window_handles
+                    if len(current_handles) <= original_window_count:
+                        approved = True
+                        print("  ✅ 审批窗口已关闭，审批成功！")
+                        break
+                except:
+                    pass
+                if attempt < max_retries:
+                    print(f"  第 {attempt} 次等待超时，继续等待...")
+                else:
+                    # 3次都没等到窗口关闭，刷新页面重新审批
+                    print(f"  ⚠️ 等待 {max_retries} 次后仍未检测到审批成功，刷新页面重新审批...")
+                    try:
+                        driver.refresh()
+                        time.sleep(3)
+                        # 重新执行审批操作
+                        AutomaticSupplierSelection(driver)
+                        # 再等一次审批结果
+                        for i in range(5):
+                            time.sleep(2)
+                            if len(driver.window_handles) <= original_window_count:
+                                approved = True
+                                print("  ✅ 刷新后审批成功！")
+                                break
+                        if not approved:
+                            print("  ❌ 刷新后仍未审批成功，跳过此流程")
+                    except Exception as e:
+                        print(f"  ❌ 刷新重试失败: {repr(e)}")
+
+            # 切换回主窗口
             try:
-                driver.switch_to.window(main_window)
+                if driver.window_handles:
+                    driver.switch_to.window(main_window)
             except WebDriverException as e:
                 print(f"  无法切换回主窗口：{repr(e)}")
                 return
         else:
-            # 同页跳转，需要返回列表页
-            driver.back()
-            print("  已返回待办列表页")
-            # 等待列表页重新加载
+            # 同页跳转模式：审批成功后页面会跳转或出现成功提示
+            max_retries = 3
+            approved = False
+            for attempt in range(1, max_retries + 1):
+                print(f"  等待审批结果... (第 {attempt}/{max_retries} 次，最多等10秒)")
+                time.sleep(10)
+                # 检查是否已返回列表页（URL变化或出现列表元素）
+                try:
+                    driver.find_element(By.CSS_SELECTOR, "tbody.ant-table-tbody")
+                    current_url = driver.current_url
+                    if current_url != prev_url or "portal" in current_url.lower():
+                        approved = True
+                        print("  ✅ 已返回列表页，审批成功！")
+                        break
+                except:
+                    pass
+                if attempt < max_retries:
+                    print(f"  第 {attempt} 次等待超时，继续等待...")
+                else:
+                    # 3次都没等到，刷新页面重新审批
+                    print(f"  ⚠️ 等待 {max_retries} 次后仍未检测到审批成功，刷新页面重新审批...")
+                    try:
+                        driver.back()
+                        time.sleep(2)
+                        driver.refresh()
+                        time.sleep(3)
+                        # 重新点击流程并审批
+                        try:
+                            driver.find_element(By.XPATH, f"//a[contains(text(), '{safe_title}')]").click()
+                            time.sleep(3)
+                            AutomaticSupplierSelection(driver)
+                            for i in range(5):
+                                time.sleep(2)
+                                driver.find_element(By.CSS_SELECTOR, "tbody.ant-table-tbody")
+                                if driver.current_url != prev_url:
+                                    approved = True
+                                    print("  ✅ 刷新后审批成功！")
+                                    break
+                            if not approved:
+                                print("  ❌ 刷新后仍未审批成功，跳过此流程")
+                        except Exception as e:
+                            print(f"  ❌ 刷新重试失败: {repr(e)}")
+                    except Exception as e:
+                        print(f"  ❌ 返回并刷新失败: {repr(e)}")
+
+            # 确保回到列表页
             try:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "tbody.ant-table-tbody"))
                 )
             except:
-                pass
+                try:
+                    driver.back()
+                    time.sleep(2)
+                except:
+                    pass
 
         # 完全回到主窗口后，稍作停顿再处理下一个
         time.sleep(2)
