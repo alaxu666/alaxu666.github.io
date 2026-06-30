@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -203,8 +204,8 @@ def update_from_history(dfPPT: pd.DataFrame, dfLS: pd.DataFrame) -> pd.DataFrame
                     val = values[col]
                     if pd.isna(val):
                         continue
-                    # 如果值是datetime类型而目标列是float，先转换列类型
-                    if isinstance(val, (datetime, pd.Timestamp)):
+                    # 如果值是datetime或字符串而目标列是float，先转换列类型
+                    if isinstance(val, (datetime, pd.Timestamp, str)):
                         dfPPT[col] = dfPPT[col].astype(object)
                     dfPPT.loc[mask & empty_mask, col] = val
     return dfPPT
@@ -362,6 +363,194 @@ def parse_model_and_device(text: str):
     return model, device
 
 
+def fill_detailed_ver_crosstab_name(dfPPT: pd.DataFrame) -> pd.DataFrame:
+    """通过OEM相似度匹配，填充所有行的Detailed_ver_crosstab_name列。
+    从EBP系统中查找与Project Name Part相似度最高的OEM项目全名。
+    """
+    driver = None
+    try:
+        driver = build_edge_driver()
+        driver.get(EBP_LOGIN_URL)
+        wait = WebDriverWait(driver, 20)
+
+        # 登录
+        account_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[formcontrolname="account"]')))
+        account_input.clear()
+        account_input.send_keys(EBP_USERNAME)
+        password_input = driver.find_element(By.CSS_SELECTOR, 'input[formcontrolname="password"]')
+        password_input.clear()
+        password_input.send_keys(EBP_PASSWORD)
+        password_input.send_keys(Keys.RETURN)
+
+        # 等待登录成功
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH, '//span[text()="EBP Program"]'))
+        )
+        print("登录成功")
+
+        # 导航到My Program List
+        ebp_program_span = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, '//span[text()="EBP Program"]'))
+        )
+        ebp_program_span.click()
+
+        my_program_list_span = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, '//span[text()="My Program List"]'))
+        )
+        my_program_list_span.click()
+        print("已进入My Program List页面")
+        time.sleep(3)
+
+        # 确保Detailed_ver_crosstab_name列存在且类型为object
+        if 'Detailed_ver_crosstab_name' not in dfPPT.columns:
+            dfPPT['Detailed_ver_crosstab_name'] = None
+        dfPPT['Detailed_ver_crosstab_name'] = dfPPT['Detailed_ver_crosstab_name'].astype(object)
+
+        print(f"[DEBUG] fill_detailed_ver_crosstab_name: 共{len(dfPPT)}行")
+        # 检查Project Name Part列是否有值
+        pnp_col = dfPPT.get('Project Name Part', pd.Series([None]*len(dfPPT)))
+        pnp_valid = pnp_col.notna().sum()
+        print(f"[DEBUG] Project Name Part列有值的行数: {pnp_valid}/{len(dfPPT)}")
+
+        # 处理每个项目
+        processed = 0
+        for idx, row in dfPPT.iterrows():
+            # 如果已有值则跳过
+            current_val = dfPPT.at[idx, 'Detailed_ver_crosstab_name']
+            if pd.notna(current_val) and str(current_val).strip() != '':
+                continue
+
+            project_name_part = str(row.get('Project Name Part', ''))
+            if not project_name_part.strip():
+                print(f"[DEBUG] 行{idx}: Project Name Part为空，跳过")
+                continue
+
+            processed += 1
+
+            print(f"处理第 {idx+1} 行数据: {project_name_part[:50]}...")
+
+            try:
+                # 确保在My Program List页面
+                my_program_list_span = WebDriverWait(driver, 20).until(
+                    EC.element_to_be_clickable((By.XPATH, '//span[text()="My Program List"]'))
+                )
+                my_program_list_span.click()
+                time.sleep(2)
+
+                # 提取OEM
+                if "," in project_name_part:
+                    oem = re.split(r',', project_name_part)[0].strip()
+                    print(f"提取的OEM: {oem}")
+                else:
+                    oem = project_name_part.strip()
+                    print(f"未找到分隔符，使用完整名称作为OEM: {oem}")
+
+                # ===== 过滤器输入逻辑 =====
+                try:
+                    filter_container = WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div[col-id="display_name_filter"]'))
+                    )
+                    filter_btn = filter_container.find_element(By.CSS_SELECTOR, 'span[data-ref="eFilterButton"]')
+                    driver.execute_script("arguments[0].click();", filter_btn)
+                    print("✓ 已点击过滤按钮")
+                    time.sleep(1.5)
+
+                    input_field = WebDriverWait(driver, 10).until(EC.visibility_of_element_located(
+                        (By.CSS_SELECTOR, "div.ag-popup input[type='text']")))
+
+                    driver.execute_script("""
+                        arguments[0].value = '';
+                        arguments[0].value = arguments[1];
+                        arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                    """, input_field, oem)
+                    print(f"✓ 已通过JS设置过滤值: {oem}")
+
+                    input_field.send_keys(Keys.RETURN)
+                    time.sleep(2.5)
+
+                except Exception as e:
+                    print(f"✗ 过滤操作失败 (OEM={oem}): {str(e)}")
+                    continue
+
+                # ===== 提取项目列表 =====
+                df_OEMprojects = pd.DataFrame(columns=["项目全名", "车型代号零部件名", "加工设备"])
+
+                try:
+                    project_list_container = WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div.ag-body-viewport.ag-layout-normal.ag-row-animation'))
+                    )
+
+                    project_spans = project_list_container.find_elements(By.XPATH, './/span[not(contains(@class, "ag-hidden")) and string-length(text()) > 5]')
+
+                    for span in project_spans:
+                        full_name = span.text.strip()
+                        if full_name.count(',') >= 4:
+                            parts = [p.strip() for p in full_name.split(',')]
+                            vehicle_part = parts[3] if len(parts) > 3 else ""
+                            equipment = parts[4] if len(parts) > 4 else ""
+
+                            new_row = pd.DataFrame([{
+                                "项目全名": full_name,
+                                "车型代号零部件名": vehicle_part,
+                                "加工设备": equipment
+                            }])
+                            df_OEMprojects = pd.concat([df_OEMprojects, new_row], ignore_index=True)
+
+                    print(f"✓ 有效项目数: {len(df_OEMprojects)}")
+                except Exception as e:
+                    print(f"✗ 项目列表提取失败: {str(e)}")
+                    continue
+
+                if df_OEMprojects.empty:
+                    print(f"[DEBUG] 行{idx}: 无有效项目数据，跳过")
+                    continue
+
+                # ===== 双层相似度匹配 =====
+                current_pnp = str(row["Project Name Part"]).strip()
+                pnp_parts = [p.strip() for p in current_pnp.split(',') if p.strip()]
+                target_vehicle = pnp_parts[1] if len(pnp_parts) > 1 else ""
+                target_equipment = pnp_parts[2] if len(pnp_parts) > 2 else ""
+
+                def calc_sim(s1, s2):
+                    if not s1 or not s2:
+                        return 0.0
+                    clean1 = re.sub(r'\s+', ' ', s1.strip().lower())
+                    clean2 = re.sub(r'\s+', ' ', s2.strip().lower())
+                    return SequenceMatcher(None, clean1, clean2).ratio()
+
+                df_OEMprojects["车型相似度"] = df_OEMprojects["车型代号零部件名"].apply(
+                    lambda x: calc_sim(x, target_vehicle))
+                df_OEMprojects["设备相似度"] = df_OEMprojects["加工设备"].apply(
+                    lambda x: calc_sim(x, target_equipment) if target_equipment else 0.0)
+
+                df_OEMprojects = df_OEMprojects.sort_values(
+                    ["车型相似度", "设备相似度"],
+                    ascending=[False, False]
+                ).reset_index(drop=True)
+
+                ProjectName = df_OEMprojects.iloc[0]["项目全名"]
+                top_vehicle_sim = df_OEMprojects.iloc[0]["车型相似度"]
+                top_equipment_sim = df_OEMprojects.iloc[0]["设备相似度"]
+
+                print(f"🔍 匹配结果 | 车型: '{target_vehicle}'(目标) vs '{df_OEMprojects.iloc[0]['车型代号零部件名']}'(匹配) | "
+                    f"车型相似度: {top_vehicle_sim:.2%} | 设备相似度: {top_equipment_sim:.2%}")
+
+                # 填入Detailed_ver_crosstab_name
+                dfPPT.at[idx, "Detailed_ver_crosstab_name"] = ProjectName
+                print(f"✓ 已填入Detailed_ver_crosstab_name: {ProjectName[:50]}...")
+
+            except Exception as e:
+                print(f"处理行 {idx} 时发生错误: {e}")
+                continue
+
+        print(f"[DEBUG] fill_detailed_ver_crosstab_name: 处理了{processed}行")
+        return dfPPT
+    finally:
+        if driver:
+            driver.quit()
+
+
 def fetch_formal_equ_from_ebp(dfPPT: pd.DataFrame) -> pd.DataFrame:
     driver = None
     try:
@@ -397,8 +586,8 @@ def fetch_formal_equ_from_ebp(dfPPT: pd.DataFrame) -> pd.DataFrame:
         print("已进入My Program List页面")
         time.sleep(3)
 
-        # 处理每个缺失EQU的项目
-        for idx, row in dfPPT.loc[dfPPT['Formal EQU'].isna() | (dfPPT['Formal EQU'].astype(str).str.strip() == ''), :].iterrows():
+        # 处理每个项目（全部行都要匹配Detailed_ver_crosstab_name）
+        for idx, row in dfPPT.iterrows():
             project_name_part = str(row.get('Project Name Part', ''))
             if not project_name_part.strip():
                 continue
@@ -491,7 +680,7 @@ def fetch_formal_equ_from_ebp(dfPPT: pd.DataFrame) -> pd.DataFrame:
                     continue
 
                 if df_OEMprojects.empty:
-                    print("⚠ 无有效项目数据，跳过当前行")
+                    print(f"[DEBUG] 行{idx}: 无有效项目数据，跳过")
                     continue
 
                 # ===== 双层相似度匹配 =====
@@ -593,14 +782,18 @@ def fetch_formal_equ_from_ebp(dfPPT: pd.DataFrame) -> pd.DataFrame:
 
                     print(f"找到的EQU Total值: {equ_value}")
 
-                    try:
-                        equ_value_float = float(equ_value)
-                        dfPPT.at[idx, "Formal EQU"] = equ_value_float
-                        print(f"成功保存EQU值: {equ_value_float}")
-                    except ValueError:
-                        print(f"警告: 无法将 '{equ_value}' 转换为数字，保存为字符串")
-                        dfPPT.at[idx, "Formal EQU"] = equ_value
+                    # 只在Formal EQU为空时才填充
+                    current_equ = dfPPT.at[idx, "Formal EQU"]
+                    if pd.isna(current_equ) or str(current_equ).strip() == '':
+                        try:
+                            equ_value_float = float(equ_value)
+                            dfPPT.at[idx, "Formal EQU"] = equ_value_float
+                            print(f"成功保存EQU值: {equ_value_float}")
+                        except ValueError:
+                            print(f"警告: 无法将 '{equ_value}' 转换为数字，保存为字符串")
+                            dfPPT.at[idx, "Formal EQU"] = equ_value
 
+                    # 始终填充Detailed_ver_crosstab_name
                     dfPPT.at[idx, "Detailed_ver_crosstab_name"] = ProjectName
 
                 except Exception as e:
@@ -677,6 +870,81 @@ def convert_datetime_to_short_date(df: pd.DataFrame) -> pd.DataFrame:
                     return s
             df[col] = df[col].apply(format_date)
     return df
+
+
+def fill_design_release_from_sheet2(dfPPT: pd.DataFrame, path: str) -> pd.DataFrame:
+    """从Sheet2中读取Design_release数据，补充Sheet1中的空值。
+    匹配条件：Project Name + PKR 相同。
+    如果Sheet2中Design_release是8位数字(YYYYMMDD)，转换为日期格式。
+    如果有多行匹配，选择日期最晚的。
+    如果所有匹配行Design_release都为空，则保持空值。
+    """
+    import openpyxl
+    from collections import defaultdict
+
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if 'Sheet2' not in wb.sheetnames:
+        return dfPPT
+
+    ws2 = wb['Sheet2']
+    # 构建查找表：key=(Project Name, PKR), value=list of Design_release
+    sheet2_lookup = defaultdict(list)
+    for row_idx in range(2, ws2.max_row + 1):
+        project_name = ws2.cell(row_idx, 1).value
+        pkr = ws2.cell(row_idx, 2).value
+        design_release = ws2.cell(row_idx, 3).value
+        if project_name is not None and pkr is not None:
+            sheet2_lookup[(str(project_name).strip(), str(pkr).strip())].append(design_release)
+
+    if not sheet2_lookup:
+        return dfPPT
+
+    # 转换8位数字日期格式
+    def convert_8digit_date(val):
+        if val is None:
+            return val
+        if isinstance(val, float):
+            if val == int(val):
+                s = str(int(val))
+            else:
+                return val
+        elif isinstance(val, datetime):
+            return val.strftime('%Y-%m-%d')
+        else:
+            s = str(val).strip()
+        if '.' in s:
+            s = s.split('.')[0]
+        if re.match(r'^\d{8}$', s):
+            try:
+                return pd.to_datetime(s, format='%Y%m%d').strftime('%Y-%m-%d')
+            except Exception:
+                return val
+        return val
+
+    filled = 0
+    for row_idx in range(len(dfPPT)):
+        dr_val = dfPPT.iloc[row_idx]['Design_release']
+        if pd.notna(dr_val) and str(dr_val).strip() != '':
+            continue
+        project_name = str(dfPPT.iloc[row_idx].get('Project Name', '')).strip()
+        pkr = str(dfPPT.iloc[row_idx].get('PKR', '')).strip()
+        key = (project_name, pkr)
+
+        if key in sheet2_lookup:
+            all_dates = sheet2_lookup[key]
+            # 转换8位数字为日期
+            converted = [convert_8digit_date(d) for d in all_dates]
+            # 过滤空值
+            valid_dates = [d for d in converted if d is not None and str(d).strip() != '']
+            if valid_dates:
+                # 选择最晚的日期
+                latest = max(valid_dates)
+                dfPPT.at[dfPPT.index[row_idx], 'Design_release'] = latest
+                filled += 1
+
+    if filled > 0:
+        print(f"从Sheet2补充了{filled}行Design_release数据")
+    return dfPPT
 
 
 def save_dataframe(df: pd.DataFrame, path: str):
@@ -891,9 +1159,32 @@ def fill_missing_pkr(dfPPT: pd.DataFrame) -> pd.DataFrame:
         return dfPPT
 
 
+def input_with_timeout(prompt, timeout=30, default=None):
+    """带超时的输入，超时后返回默认值"""
+    result = [default]
+
+    def target():
+        try:
+            result[0] = input(prompt)
+        except EOFError:
+            pass
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+
+    if result[0] is None:
+        print(f"\n输入超时（{timeout}秒），将使用默认值: {default}")
+
+    return result[0]
+
+
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    month_input = input('请输入要统计的月份，例如2605：').strip()
+    # 获取当前月份作为默认值（YYMM格式，如"2606"）
+    default_month = datetime.now().strftime('%y%m')
+    month_input = input_with_timeout('请输入要统计的月份，例如2605：', timeout=30, default=default_month)
+    month_input = month_input.strip()
     Month = parse_month_input(month_input)
     print(f'统计月份：{Month.strftime("%Y-%m")}')
 
@@ -940,6 +1231,9 @@ def main():
         dfPPT['Design_release'] = dfPPT['Design_release'].apply(convert_8digit_date)
         print("已转换Design_release列中的8位数字日期格式")
 
+    # 从Sheet2补充Design_release空值
+    dfPPT = fill_design_release_from_sheet2(dfPPT, dfPPT_path)
+
     dfPPT = merge_phase3_into_ppt(dfPPT, dfPhase3)
     dfPPT = update_from_history(dfPPT, dfLS)
     dfPPT = fill_project_name_part(dfPPT)
@@ -948,6 +1242,9 @@ def main():
 
     if dfPPT['Formal EQU'].isna().any() or (dfPPT['Formal EQU'].astype(str).str.strip() == '').any():
         dfPPT = fetch_formal_equ_from_ebp(dfPPT)
+
+    # 始终填充Detailed_ver_crosstab_name（通过OEM相似度匹配）
+    dfPPT = fill_detailed_ver_crosstab_name(dfPPT)
 
     # 补充EBP Leader空值
     dfPPT = fill_missing_ebp_leader(dfPPT)
@@ -958,6 +1255,16 @@ def main():
     dfLS_updated = refresh_history(dfPPT, dfLS)
     save_dataframe(dfLS_updated, dfLS_path)
     save_dataframe(dfPPT, dfPPT_path)
+
+    # 导出空的Sheet2（仅保留表头）
+    import openpyxl
+    wb = openpyxl.load_workbook(dfPPT_path)
+    if 'Sheet2' in wb.sheetnames:
+        del wb['Sheet2']
+    ws2 = wb.create_sheet('Sheet2')
+    ws2.append(['Project Name', 'PKR', 'Design_release'])
+    wb.save(dfPPT_path)
+
     print('处理完成，已覆盖泡泡图历史数据.xlsx和泡泡图当月数据.xlsx')
 
 
