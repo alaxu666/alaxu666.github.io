@@ -59,8 +59,8 @@ while True:
     if should_run_now("pkr", "10:00"):
         run_py(py_files["pkr"], "pkr")
 
-    # 每天 16:00 执行 采购自动确认.py
-    if should_run_now("caigou", "16:00"):
+    # 每天 15:40 执行 采购自动确认.py
+    if should_run_now("caigou", "15:40"):
         run_py(py_files["caigou"], "caigou")
 
     # 周二 14:00 执行 库存统计.py（weekday=1 表示周二）
