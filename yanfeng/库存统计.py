@@ -557,7 +557,7 @@ html_to_pdf(html_path, pdf_path)
 def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_path):
     """
     使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件，保持浏览器打开。
-    附件上传流程：点击“附加文件” -> 点击“浏览此计算机”（button[name='浏览此计算机']） -> 选择文件。
+    附件上传流程：点击“附加文件” -> 点击“浏览此计算机” -> 强制显示 file input 并发送文件路径。
     """
     print("=== 使用网页版 Outlook 发送邮件 ===")
 
@@ -721,13 +721,13 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
             body_div.clear()
             driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
 
-            # ---------- 附加附件（使用用户指定的 button[name='浏览此计算机']） ----------
+            # ---------- 附加附件（强制显示 file input） ----------
             if attachment_path and os.path.exists(attachment_path):
                 print(f"尝试添加附件: {attachment_path} ...")
                 attachment_success = False
-                for attempt in range(2):  # 最多尝试2次
+                for attempt in range(2):
                     try:
-                        # 1. 点击“附加文件”按钮（优先使用 aria-label 或 label 属性）
+                        # 1. 点击“附加文件”按钮
                         attach_btn = None
                         try:
                             attach_btn = WebDriverWait(driver, 10).until(
@@ -739,7 +739,6 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
                                     EC.element_to_be_clickable((By.CSS_SELECTOR, "button[label='附加文件']"))
                                 )
                             except:
-                                # 回退到您提供的 ID
                                 attach_btn = WebDriverWait(driver, 10).until(
                                     EC.element_to_be_clickable((By.ID, "620_21_8_8c7b840b-8f3f-e2f4-f1fa-7420c98fdb14"))
                                 )
@@ -747,9 +746,9 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
                         time.sleep(0.5)
                         driver.execute_script("arguments[0].click();", attach_btn)
                         print("  已点击“附加文件”按钮")
-                        time.sleep(1.5)  # 等待下拉菜单出现
+                        time.sleep(1.5)
 
-                        # 2. 点击“浏览此计算机”按钮（使用 name 属性）
+                        # 2. 点击“浏览此计算机”按钮
                         browse_btn = WebDriverWait(driver, 15).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='浏览此计算机']"))
                         )
@@ -759,10 +758,19 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
                         print("  已点击“浏览此计算机”")
                         time.sleep(1)
 
-                        # 3. 选择文件
-                        file_input = WebDriverWait(driver, 20).until(
+                        # 3. 定位 file input 并强制显示
+                        file_input = WebDriverWait(driver, 10).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
                         )
+                        driver.execute_script("""
+                            arguments[0].style.display = 'block';
+                            arguments[0].style.opacity = '1';
+                            arguments[0].style.width = '200px';
+                            arguments[0].style.height = '50px';
+                            arguments[0].style.position = 'relative';
+                            arguments[0].style.zIndex = '9999';
+                        """, file_input)
+                        time.sleep(0.5)
                         file_input.send_keys(os.path.abspath(attachment_path))
                         print("  附件已上传")
                         time.sleep(2)
