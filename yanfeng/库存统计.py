@@ -556,8 +556,7 @@ html_to_pdf(html_path, pdf_path)
 # ================== 新增：网页版 Outlook 邮件发送函数（带附件，使用指定选择器） ==================
 def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_path):
     """
-    使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件，保持浏览器打开。
-    附件上传流程：点击“附加文件” -> 点击“浏览此计算机” -> 强制显示 file input 并发送文件路径。
+    使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件（通过拖拽上传），保持浏览器打开。
     """
     print("=== 使用网页版 Outlook 发送邮件 ===")
 
@@ -614,7 +613,6 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
         except:
             pass
 
-        # 等待邮箱主界面加载
         print("等待邮箱主界面加载...")
         wait.until(EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'新邮件')]")))
         print("登录成功，邮箱已加载")
@@ -721,72 +719,53 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
             body_div.clear()
             driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
 
-            # ---------- 附加附件（强制显示 file input） ----------
+            # ---------- 附加附件（使用拖拽方式） ----------
             if attachment_path and os.path.exists(attachment_path):
-                print(f"尝试添加附件: {attachment_path} ...")
-                attachment_success = False
-                for attempt in range(2):
-                    try:
-                        # 1. 点击“附加文件”按钮
-                        attach_btn = None
-                        try:
-                            attach_btn = WebDriverWait(driver, 10).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='附加文件']"))
-                            )
-                        except:
-                            try:
-                                attach_btn = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[label='附加文件']"))
-                                )
-                            except:
-                                attach_btn = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.ID, "620_21_8_8c7b840b-8f3f-e2f4-f1fa-7420c98fdb14"))
-                                )
-                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_btn)
-                        time.sleep(0.5)
-                        driver.execute_script("arguments[0].click();", attach_btn)
-                        print("  已点击“附加文件”按钮")
-                        time.sleep(1.5)
+                print(f"尝试通过拖拽添加附件: {attachment_path} ...")
+                try:
+                    import base64
+                    with open(attachment_path, "rb") as f:
+                        file_data = f.read()
+                    file_b64 = base64.b64encode(file_data).decode('utf-8')
+                    file_name = os.path.basename(attachment_path)
+                    ext = os.path.splitext(file_name)[1].lower()
+                    mime_map = {'.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.png': 'image/png', '.jpg': 'image/jpeg'}
+                    mime_type = mime_map.get(ext, 'application/octet-stream')
 
-                        # 2. 点击“浏览此计算机”按钮
-                        browse_btn = WebDriverWait(driver, 15).until(
-                            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[name='浏览此计算机']"))
-                        )
-                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", browse_btn)
-                        time.sleep(0.5)
-                        driver.execute_script("arguments[0].click();", browse_btn)
-                        print("  已点击“浏览此计算机”")
-                        time.sleep(1)
-
-                        # 3. 定位 file input 并强制显示
-                        file_input = WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-                        )
-                        driver.execute_script("""
-                            arguments[0].style.display = 'block';
-                            arguments[0].style.opacity = '1';
-                            arguments[0].style.width = '200px';
-                            arguments[0].style.height = '50px';
-                            arguments[0].style.position = 'relative';
-                            arguments[0].style.zIndex = '9999';
-                        """, file_input)
-                        time.sleep(0.5)
-                        file_input.send_keys(os.path.abspath(attachment_path))
-                        print("  附件已上传")
-                        time.sleep(2)
-                        attachment_success = True
-                        break
-                    except Exception as e:
-                        print(f"  第 {attempt+1} 次尝试失败: {e}")
-                        if attempt == 0:
-                            try:
-                                driver.find_element(By.TAG_NAME, "body").click()
-                                time.sleep(0.5)
-                            except:
-                                pass
-                        continue
-                if not attachment_success:
-                    print("  附件上传多次失败，请手动添加附件。")
+                    js_drop = """
+                        var fileData = arguments[0];
+                        var fileName = arguments[1];
+                        var mimeType = arguments[2];
+                        var target = arguments[3];
+                        
+                        var byteCharacters = atob(fileData);
+                        var byteNumbers = new Array(byteCharacters.length);
+                        for (var i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        var byteArray = new Uint8Array(byteNumbers);
+                        var blob = new Blob([byteArray], {type: mimeType});
+                        
+                        var file = new File([blob], fileName, {type: mimeType});
+                        var dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        
+                        // 触发 drop 事件
+                        var dropEvent = new DragEvent('drop', {
+                            bubbles: true,
+                            cancelable: true,
+                            dataTransfer: dataTransfer
+                        });
+                        target.dispatchEvent(dropEvent);
+                        
+                        // 有些页面需要同时触发 dragover 等事件，但 drop 已够
+                        return true;
+                    """
+                    driver.execute_script(js_drop, file_b64, file_name, mime_type, body_div)
+                    print("  附件已通过拖拽上传")
+                    time.sleep(2)
+                except Exception as e:
+                    print(f"  拖拽上传失败: {e}，请手动添加附件。")
             else:
                 if attachment_path:
                     print(f"  附件不存在: {attachment_path}，跳过附加。")
