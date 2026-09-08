@@ -557,7 +557,7 @@ html_to_pdf(html_path, pdf_path)
 def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_path):
     """
     使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件，保持浏览器打开。
-    附件按钮使用用户指定的 <span class="label-291">浏览此计算机</span> 定位。
+    附件上传流程：点击“附加文件” -> 点击“浏览此计算机” -> 选择文件。
     """
     print("=== 使用网页版 Outlook 发送邮件 ===")
 
@@ -723,22 +723,31 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
             body_div.clear()
             driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
 
-            # ---------- 附加附件（使用用户指定的选择器） ----------
+            # ---------- 附加附件（按流程：点击“附加文件” -> 点击“浏览此计算机” -> 选择文件） ----------
             if attachment_path and os.path.exists(attachment_path):
                 print(f"尝试添加附件: {attachment_path} ...")
                 try:
-                    # 点击“浏览此计算机”按钮（使用精确的 span 选择器）
-                    attach_span = WebDriverWait(driver, 20).until(
+                    # 1. 点击“附加文件”按钮（使用指定的 id）
+                    attach_btn = WebDriverWait(driver, 20).until(
+                        EC.element_to_be_clickable((By.ID, "620_21_8_8c7b840b-8f3f-e2f4-f1fa-7420c98fdb14"))
+                    )
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_btn)
+                    time.sleep(0.5)
+                    attach_btn.click()
+                    print("  已点击“附加文件”按钮")
+                    time.sleep(1)  # 等待下拉菜单出现
+
+                    # 2. 点击“浏览此计算机”按钮（span.label-291）
+                    browse_span = WebDriverWait(driver, 20).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "span.label-291"))
                     )
-                    # 滚动到可见并点击
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_span)
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", browse_span)
                     time.sleep(0.5)
-                    attach_span.click()
+                    browse_span.click()
                     print("  已点击“浏览此计算机”")
-                    time.sleep(1)
+                    time.sleep(1)  # 等待文件选择对话框
 
-                    # 等待文件选择对话框出现（input[type=file]）
+                    # 3. 定位 input[type=file] 并发送文件路径
                     file_input = WebDriverWait(driver, 20).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
                     )
