@@ -1,0 +1,1 @@
+我想用飞书自建应用，用python实现数据自动更新到多维表格中（比如想把C:\XSR\githubPage\yanfeng\PKR确认信息\PKR完成情况（近两周）.xlsx中的数据，自动更新到飞书“PKR未完成情况（近两周）”多维表格中）。创建好自建应用后，得到了App ID和App Secret，然后怎么办？

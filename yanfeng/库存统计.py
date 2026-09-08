@@ -1,0 +1,807 @@
+import pandas as pd
+import re
+import json
+from datetime import datetime
+import subprocess
+import os
+import sys
+import glob
+import time
+
+# 添加当前目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from config_loader import load_config_module
+
+# ---------- 新增 Selenium 相关导入 ----------
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.edge.service import Service as EdgeService
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import TimeoutException
+
+# ================== 原有数据读取和处理（不变） ==================
+dfLY = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/库存统计.xlsx", sheet_name="本周领用报表")
+dfRK = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/库存统计.xlsx", sheet_name="本周入库报表")
+dfH = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/库存统计.xlsx", sheet_name="huang")
+dfKC = pd.read_excel("C:/XSR/githubPage/yanfeng/库存数据/本周库存统计.xlsx", sheet_name="2026")
+
+# 从dfH中提取数据
+gl_row = dfH[dfH["类别"] == "合计"]
+if len(gl_row) > 0:
+    GLTP_raw = gl_row.iloc[0]["隔离金额"]
+    LYTP_raw = gl_row.iloc[0]["领用金额"]
+    GLTP = float(GLTP_raw) if GLTP_raw not in (None, '', 'nan') else 0.0
+    LYTP = float(LYTP_raw) if LYTP_raw not in (None, '', 'nan') else 0.0
+else:
+    GLTP = 0.0
+    LYTP = 0.0
+
+# 筛选dfRK数据并计算退库总价
+dfRK_filtered = dfRK[dfRK["类别"].isin(["002-结余", "004-备件", "010-保税区"])]
+RKTP = dfRK_filtered["总价"].sum()
+RKTP = float(RKTP) if not pd.isna(RKTP) else 0.0
+
+# ========== 自动计算上周（要更新的周） ==========
+today = datetime.now()
+_, current_week, _ = today.isocalendar()
+last_week_num = current_week - 1
+if last_week_num == 0:
+    last_week_num = 52
+target_week = f"CW{last_week_num:02d}"
+print(f"本周是{current_week}周，将数据写入{target_week}")
+
+# 确保 dfKC 中有目标周的行
+if not (dfKC["周数"] == target_week).any():
+    new_row = pd.DataFrame({'周数': [target_week], '领用': [0], '隔离': [0], '退库': [0], '2025参考': [0], '每周需复用': [0]})
+    dfKC = pd.concat([dfKC, new_row], ignore_index=True)
+
+# 更新dfKC中的数据
+dfKC.loc[dfKC["周数"] == target_week, "领用"] = LYTP
+dfKC.loc[dfKC["周数"] == target_week, "隔离"] = GLTP
+dfKC.loc[dfKC["周数"] == target_week, "退库"] = RKTP
+
+# 在统计分析前，先对dfLY和dfRK进行数据筛选
+dfLY = dfLY[dfLY["类别"].isin(["002-结余", "004-备件", "010-保税区"])]
+dfRK = dfRK[dfRK["类别"].isin(["002-结余", "004-备件", "010-保税区"])]
+
+# 处理dfLY表格 - 项目统计
+dfXM_ZJ = pd.DataFrame(columns=["项目名", "领用总价"])
+lXMBH = dfLY["项目编号名称"].drop_duplicates().tolist()
+for xmbh in lXMBH:
+    total_price = dfLY[dfLY["项目编号名称"] == xmbh]["总价"].sum()
+    new_row = pd.DataFrame({"项目名": [xmbh], "领用总价": [total_price]})
+    dfXM_ZJ = pd.concat([dfXM_ZJ, new_row], ignore_index=True)
+
+# 处理dfLY表格 - 隔离人统计
+dfRM_ZJ = pd.DataFrame(columns=["隔离人", "隔离总价"])
+lGLR = dfLY["隔离人"].drop_duplicates().tolist()
+for glr in lGLR:
+    total_price = dfLY[dfLY["隔离人"] == glr]["总价"].sum()
+    new_row = pd.DataFrame({"隔离人": [glr], "隔离总价": [total_price]})
+    dfRM_ZJ = pd.concat([dfRM_ZJ, new_row], ignore_index=True)
+
+# 处理dfRK表格 - 退库统计
+dfTK_ZJ = pd.DataFrame(columns=["项目名", "退库总价"])
+lXMTK = dfRK["项目编码名称"].drop_duplicates().tolist()
+for xmtk in lXMTK:
+    total_price = dfRK[dfRK["项目编码名称"] == xmtk]["总价"].sum()
+    new_row = pd.DataFrame({"项目名": [xmtk], "退库总价": [total_price]})
+    dfTK_ZJ = pd.concat([dfTK_ZJ, new_row], ignore_index=True)
+
+# 读取花名册并保留部门为 Program Management、PD 和 Manufacturing 的记录
+script_dir = os.path.dirname(os.path.abspath(__file__))
+roster_path = os.path.join(script_dir, "DATA", "装备中心花名册.xlsx")
+if os.path.exists(roster_path):
+    try:
+        dfCY = pd.read_excel(roster_path, sheet_name="花名册")
+        if "部门" in dfCY.columns:
+            dfCY = dfCY[dfCY["部门"].isin(["Program Management", "PD", "Manufacturing"])].copy()
+        else:
+            print(f"警告：花名册中未找到 '部门' 列，保留原始 dfCY")
+        if "姓名" not in dfCY.columns:
+            print(f"警告：花名册中未找到 '姓名' 列，dfCY 过滤后仍会保留原始数据")
+    except Exception as e:
+        print(f"读取花名册失败：{e}")
+        dfCY = pd.DataFrame(columns=["姓名", "部门"])
+else:
+    print(f"未找到花名册文件：{roster_path}")
+    dfCY = pd.DataFrame(columns=["姓名", "部门"])
+
+# 删除 dfRM_ZJ 中“隔离人”在 dfCY“姓名”中出现的数据
+if not dfRM_ZJ.empty and "隔离人" in dfRM_ZJ.columns and "姓名" in dfCY.columns:
+    cy_names = dfCY["姓名"].dropna().astype(str).tolist()
+    dfRM_ZJ = dfRM_ZJ[~dfRM_ZJ["隔离人"].astype(str).isin(cy_names)].copy()
+
+# 过滤函数：只保留项目名以6位数字开头的数据
+def starts_with_6_digits(text):
+    if pd.isna(text) or not isinstance(text, str):
+        return False
+    return bool(re.match(r'^\d{6}', text))
+
+# 安全过滤
+if not dfXM_ZJ.empty:
+    mask_xm = dfXM_ZJ["项目名"].apply(starts_with_6_digits)
+    dfXM_ZJ = dfXM_ZJ.loc[mask_xm]
+if not dfTK_ZJ.empty:
+    mask_tk = dfTK_ZJ["项目名"].apply(starts_with_6_digits)
+    dfTK_ZJ = dfTK_ZJ.loc[mask_tk]
+
+# 追加功能：从dfTK_ZJ和dfXM_ZJ中提取6位任务号到Lq，并用最新Project_List文件匹配后更新项目名
+
+def extract_task_code(value):
+    """提取项目名中的6位任务号：只有6位数字+非英文字母字符组成的字符串（如'250055'或'250055-- '）"""
+    if pd.isna(value):
+        return None
+    s = str(value).strip()
+    if not s or s == 'nan':
+        return None
+    # 匹配：6位数字开头，后面只能跟非英文字母字符（数字、符号、空格等），不能跟英文字母
+    m = re.match(r'^(\d{6})([^a-zA-Z]*)$', s)
+    return m.group(1) if m else None
+
+
+def extract_task_number(project_name):
+    """从Project Name中提取任务书编号：第4个','后面的文本中的6个连续数字"""
+    if pd.isna(project_name):
+        return ""
+    text = str(project_name)
+    # 按逗号分割，最多分5段，取第4个逗号后面的部分（即第5段）
+    parts = text.split(",", 4)
+    if len(parts) < 5:
+        return ""
+    tail = parts[4]
+    match = re.search(r"(\d{6})", tail)
+    return match.group(1) if match else ""
+
+
+def extract_middle_text(project_name):
+    """从Project Name中提取第2个','和第5个','之间的文本（不包括这两个','）"""
+    if pd.isna(project_name):
+        return ""
+    parts = str(project_name).split(",")
+    if len(parts) < 5:
+        return ""
+    # 第2个','后 = index 2，第5个','前 = index 4（不包括第5个','本身）
+    return ",".join(parts[2:5]).strip()
+
+
+Lq = []
+# 从dfTK_ZJ中提取6位任务号
+if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
+    Lq = [code for code in dfTK_ZJ["项目名"].astype(str).map(extract_task_code) if code and isinstance(code, str)]
+# 从dfXM_ZJ中也提取6位任务号
+if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+    Lq_xm = [code for code in dfXM_ZJ["项目名"].astype(str).map(extract_task_code) if code and isinstance(code, str)]
+    Lq.extend(Lq_xm)
+# 去重
+Lq = list(set(Lq))
+print(f"Lq列表（6位任务号）: {Lq}")
+
+dfProject_List = pd.DataFrame()
+if Lq:
+    try:
+        config = load_config_module()
+        download_dir = config.DOWNLOAD_DIR
+    except Exception as e:
+        download_dir = None
+        print(f"读取 config.py 失败: {e}")
+
+    if download_dir:
+        project_files = glob.glob(os.path.join(download_dir, "Project_List*.xls*"))
+        if project_files:
+            latest_file = max(project_files, key=os.path.getmtime)
+            try:
+                dfProject_List = pd.read_excel(latest_file)
+                print(f"已读取最新 Project_List 文件：{latest_file}")
+            except Exception as e:
+                print(f"读取 Project_List 文件失败：{e}")
+        else:
+            print(f"警告：在下载目录未找到 Project_List 文件：{download_dir}")
+
+if not dfProject_List.empty and "Project Name" in dfProject_List.columns:
+    # 新增"任务书编号"列
+    dfProject_List["任务书编号"] = dfProject_List["Project Name"].apply(extract_task_number).astype(str)
+
+    # 构建任务书编号到中间文本的映射
+    task_map = {}
+    for _, row in dfProject_List.iterrows():
+        task_no = str(row.get("任务书编号", "")).strip()
+        if not task_no:
+            continue
+        middle = extract_middle_text(row.get("Project Name", ""))
+        if task_no not in task_map:
+            task_map[task_no] = middle
+
+    print(f"任务书编号映射: {task_map}")
+
+    if task_map:
+        def replace_project_name(value):
+            if pd.isna(value):
+                return value
+            code = extract_task_code(value)
+            if not code:
+                return value
+            # 任务号在Lq中 且 在task_map中有对应
+            if code in Lq and code in task_map:
+                suffix = task_map[code]
+                return f"{code}-{suffix}"
+            return value
+
+        # 对dfTK_ZJ和dfXM_ZJ都应用替换
+        if not dfTK_ZJ.empty and "项目名" in dfTK_ZJ.columns:
+            dfTK_ZJ["项目名"] = dfTK_ZJ["项目名"].astype(str).apply(replace_project_name)
+        if not dfXM_ZJ.empty and "项目名" in dfXM_ZJ.columns:
+            dfXM_ZJ["项目名"] = dfXM_ZJ["项目名"].astype(str).apply(replace_project_name)
+else:
+    if dfProject_List.empty and Lq:
+        print("警告：dfProject_List 为空，无法执行任务书编号匹配")
+    elif "Project Name" not in dfProject_List.columns and Lq:
+        print("警告：Project_List 文件中缺少 'Project Name' 列，无法执行任务书编号匹配")
+
+# 排序
+if not dfXM_ZJ.empty and '领用总价' in dfXM_ZJ.columns:
+    dfXM_ZJ = dfXM_ZJ.sort_values(by="领用总价", ascending=False)
+if not dfRM_ZJ.empty and '隔离总价' in dfRM_ZJ.columns:
+    dfRM_ZJ = dfRM_ZJ.sort_values(by="隔离总价", ascending=False)
+if not dfTK_ZJ.empty and '退库总价' in dfTK_ZJ.columns:
+    dfTK_ZJ = dfTK_ZJ.sort_values(by="退库总价", ascending=False)
+else:
+    print("警告：dfTK_ZJ 无有效数据，跳过排序")
+
+# 保存到Excel文件
+output_file = "C:/XSR/githubPage/yanfeng/库存数据/本周库存统计.xlsx"
+try:
+    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+        dfKC.to_excel(writer, sheet_name="2026", index=False)
+        dfXM_ZJ.to_excel(writer, sheet_name="dfXM_ZJ", index=False)
+        dfRM_ZJ.to_excel(writer, sheet_name="dfRM_ZJ", index=False)
+        dfTK_ZJ.to_excel(writer, sheet_name="dfTK_ZJ", index=False)
+    print(f"数据已保存到: {output_file}")
+except PermissionError:
+    output_file = "C:/XSR/githubPage/yanfeng/库存数据/本周库存统计_新.xlsx"
+    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+        dfKC.to_excel(writer, sheet_name="2026", index=False)
+        dfXM_ZJ.to_excel(writer, sheet_name="dfXM_ZJ", index=False)
+        dfRM_ZJ.to_excel(writer, sheet_name="dfRM_ZJ", index=False)
+        dfTK_ZJ.to_excel(writer, sheet_name="dfTK_ZJ", index=False)
+    print(f"数据已保存到: {output_file}")
+
+print("库存统计数据更新完成！")
+print(f"领用金额: {LYTP}")
+print(f"隔离金额: {GLTP}")
+print(f"退库总价: {RKTP}")
+print(f"项目统计: {len(dfXM_ZJ)} 个项目")
+print(f"隔离人统计: {len(dfRM_ZJ)} 个隔离人")
+print(f"退库统计: {len(dfTK_ZJ)} 个项目")
+
+# ================== 专业图表数据准备（固定1-52周，横坐标全部显示） ==================
+all_weeks = [f"CW{i:02d}" for i in range(1, 53)]
+print(f"主图表将显示周数范围: {all_weeks[0]} ~ {all_weeks[-1]}")
+
+week_data = {w: {'2025参考': 0.0, '领用': 0.0, '隔离': 0.0, '每周需复用': 0.0} for w in all_weeks}
+for _, row in dfKC.iterrows():
+    week_raw = str(row.get('周数', '')).strip().upper()
+    if week_raw in week_data:
+        for col in ['2025参考', '领用', '隔离', '每周需复用']:
+            val = row.get(col, 0)
+            try:
+                week_data[week_raw][col] = float(val) if not pd.isna(val) else 0.0
+            except:
+                week_data[week_raw][col] = 0.0
+
+weeks = all_weeks
+data_2025 = [week_data[w]['2025参考'] for w in weeks]
+data_ly = [week_data[w]['领用'] for w in weeks]
+data_gl = [week_data[w]['隔离'] for w in weeks]
+data_fy = [week_data[w]['每周需复用'] for w in weeks]
+
+print(f"数据提取完成，共 {len(weeks)} 周，最后10周领用数据预览: {data_ly[-10:]}")
+
+# 横向条形图数据准备
+TOP_N = 15
+dfXM_top = dfXM_ZJ.head(TOP_N).copy() if not dfXM_ZJ.empty else pd.DataFrame(columns=['项目名', '领用总价'])
+dfRM_top = dfRM_ZJ.head(TOP_N).copy() if not dfRM_ZJ.empty else pd.DataFrame(columns=['隔离人', '隔离总价'])
+dfTK_top = dfTK_ZJ.head(TOP_N).copy() if not dfTK_ZJ.empty else pd.DataFrame(columns=['项目名', '退库总价'])
+
+project_names = dfXM_top['项目名'].tolist() if not dfXM_top.empty else []
+project_ly_vals = dfXM_top['领用总价'].tolist() if not dfXM_top.empty else []
+isolator_names = dfRM_top['隔离人'].tolist() if not dfRM_top.empty else []
+isolator_vals = dfRM_top['隔离总价'].tolist() if not dfRM_top.empty else []
+return_project_names = dfTK_top['项目名'].tolist() if not dfTK_top.empty else []
+return_vals = dfTK_top['退库总价'].tolist() if not dfTK_top.empty else []
+
+project_ly_vals = [float(x) for x in project_ly_vals]
+isolator_vals = [float(x) for x in isolator_vals]
+return_vals = [float(x) for x in return_vals]
+
+project_names_json = json.dumps(project_names, ensure_ascii=False)
+project_ly_json = json.dumps(project_ly_vals)
+isolator_names_json = json.dumps(isolator_names, ensure_ascii=False)
+isolator_vals_json = json.dumps(isolator_vals)
+return_names_json = json.dumps(return_project_names, ensure_ascii=False)
+return_vals_json = json.dumps(return_vals)
+
+# ================== 生成专业库存图表（横坐标全部显示） ==================
+professional_html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>专业库存统计图表</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 关键：A3横向布局 */
+        @page {{
+            size: A3 landscape;
+            margin: 0.5cm;
+        }}
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 5mm;
+            background: #f5f5f5;
+        }}
+        .container {{
+            width: 1200px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 8px;
+        }}
+        canvas {{
+            width: 1200px !important;
+            height: auto !important;
+            display: block;
+            max-width: 1200px;
+        }}
+        @media print {{
+            .container {{
+                width: auto !important;
+                max-width: none;
+                margin: 0;
+            }}
+            canvas {{
+                width: 1200px !important;
+                height: auto !important;
+                max-width: none;
+            }}
+        }}
+        h1 {{
+            text-align: center;
+            font-size: 24px;
+            margin: 10px 0;
+        }}
+        .legend {{
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+        }}
+        .legend-color {{
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }}
+        .color-2025 {{ background: #A6D396; }}
+        .color-ly {{ background: #20678A; }}
+        .color-gl {{ background: #F26E29; }}
+        .color-fy {{ background: #0F9ED5; }}
+        .chart-container {{
+            width: 1200px;
+            height: 560px;
+            margin: 20px auto;
+        }}
+        .horizontal-chart-container {{
+            width: 1200px;
+            height: 600px;
+            margin: 30px auto;
+            page-break-inside: avoid;
+        }}
+        h2 {{
+            margin-top: 40px;
+            color: #156082;
+            border-left: 5px solid #156082;
+            padding-left: 15px;
+            font-size: 20px;
+            page-break-after: avoid;
+        }}
+        .chart-section {{
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }}
+        .data-info {{
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>专业库存统计图表</h1>
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color color-2025"></div><span>2025参考 (区域图)</span></div>
+        <div class="legend-item"><div class="legend-color color-ly"></div><span>领用 (柱形图-下)</span></div>
+        <div class="legend-item"><div class="legend-color color-gl"></div><span>隔离 (柱形图-上)</span></div>
+        <div class="legend-item"><div class="legend-color color-fy"></div><span>每周需复用 (线型图)</span></div>
+    </div>
+    <div class="chart-container"><canvas id="mainChart" width="1200" height="560" style="width:1200px;height:560px"></canvas></div>
+    <div class="chart-section">
+        <h2>📊 项目 - 库存领用</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartProject" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
+    <div class="chart-section">
+        <h2>👤 隔离人 - 库存隔离</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartIsolator" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
+    <div class="chart-section">
+        <h2>📦 项目 - 退库</h2>
+        <div class="horizontal-chart-container"><canvas id="barChartReturn" width="1200" height="600" style="width:1200px;height:600px"></canvas></div>
+    </div>
+    <div class="data-info">
+        <h3>图表说明</h3>
+        <ul><li>区域图 (绿色)：2025年每周金额趋势</li><li>柱形图 (蓝色+橙色)：领用（下）+ 隔离（上）</li><li>线型图 (蓝色)：每周需复用金额</li><li>横向条形图：项目领用、隔离人隔离、项目退库 TOP15</li></ul>
+        <p>数据更新时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+</div>
+<script>
+    const weekData = {json.dumps(weeks)};
+    const data2025 = {json.dumps(data_2025)};
+    const dataLY = {json.dumps(data_ly)};
+    const dataGL = {json.dumps(data_gl)};
+    const dataFY = {json.dumps(data_fy)};
+    const projectNames = {project_names_json};
+    const projectValues = {project_ly_json};
+    const isolatorNames = {isolator_names_json};
+    const isolatorValues = {isolator_vals_json};
+    const returnNames = {return_names_json};
+    const returnValues = {return_vals_json};
+
+    new Chart(document.getElementById('mainChart'), {{
+        type:'bar', data:{{ labels:weekData, datasets:[
+            {{ type:'line', label:'2025参考', data:data2025, backgroundColor:'rgba(166,211,150,0.3)', borderColor:'#A6D396', borderWidth:2, fill:true, tension:0.1, order:3 }},
+            {{ type:'bar', label:'领用', data:dataLY, backgroundColor:'#20678A', stack:'stack0', order:2 }},
+            {{ type:'bar', label:'隔离', data:dataGL, backgroundColor:'#F26E29', stack:'stack0', order:2 }},
+            {{ type:'line', label:'每周需复用', data:dataFY, borderColor:'#0F9ED5', borderWidth:3, pointBackgroundColor:'#0F9ED5', pointBorderColor:'#fff', pointRadius:4, fill:false, tension:0.2, order:1 }}
+        ] }},
+        options:{{ responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ stacked:true, title:{{ display:true, text:'周数' }}, ticks:{{ maxRotation:90, minRotation:45, autoSkip:false }} }}, y:{{ beginAtZero:true, title:{{ display:true, text:'金额 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }}, plugins:{{ tooltip:{{ callbacks:{{ label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toLocaleString() }} }} }} }}
+    }});
+    new Chart(document.getElementById('barChartProject'), {{ type:'bar', data:{{ labels:projectNames, datasets:[{{ label:'领用总价', data:projectValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'领用总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartIsolator'), {{ type:'bar', data:{{ labels:isolatorNames, datasets:[{{ label:'隔离总价', data:isolatorValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'隔离总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+    new Chart(document.getElementById('barChartReturn'), {{ type:'bar', data:{{ labels:returnNames, datasets:[{{ label:'退库总价', data:returnValues, backgroundColor:'#156082', barThickness:24, maxBarThickness:24 }}] }}, options:{{ indexAxis:'y', responsive:false, maintainAspectRatio:false, devicePixelRatio:1, scales:{{ x:{{ title:{{ display:true, text:'退库总价 (元)' }}, ticks:{{ callback:v=>v.toLocaleString() }} }} }} }} }});
+</script>
+</body>
+</html>"""
+professional_html_file = "C:/XSR/githubPage/yanfeng/库存数据/专业库存图表.html"
+with open(professional_html_file, 'w', encoding='utf-8') as f:
+    f.write(professional_html)
+print(f"专业库存图表已生成: {professional_html_file}")
+
+# ================== 将专业图表转换为PDF（横向纸张） ==================
+def html_to_pdf(html_path, pdf_path):
+    browser_paths = [
+        "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    ]
+    browser_exe = None
+    for path in browser_paths:
+        if os.path.exists(path):
+            browser_exe = path
+            break
+    if not browser_exe:
+        print(f"未找到 Edge 或 Chrome 浏览器，无法将 {html_path} 转换为 PDF。")
+        return False
+
+    cmd = [
+        browser_exe, "--headless", "--disable-gpu",
+        "--landscape",
+        "--window-size=1366,768",
+        "--force-device-scale-factor=1",
+        "--virtual-time-budget=15000",
+        "--no-margins",
+        "--print-to-pdf-no-header",
+        f"--print-to-pdf={pdf_path}",
+        html_path
+    ]
+    try:
+        startupinfo = None
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding='utf-8',
+            errors='ignore',
+            startupinfo=startupinfo
+        )
+        if result.returncode == 0 and os.path.exists(pdf_path):
+            print(f"PDF已生成: {pdf_path}")
+            return True
+        else:
+            print(f"转换失败: {html_path} -> {pdf_path}, 错误: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        print(f"转换超时（60秒）: {html_path}")
+        return False
+    except Exception as e:
+        print(f"转换异常: {e}")
+        return False
+
+# 只转换专业图表为PDF
+html_path = professional_html_file
+pdf_path = html_path.replace('.html', '.pdf')
+html_to_pdf(html_path, pdf_path)
+
+# ================== 新增：网页版 Outlook 邮件发送函数（带附件，使用指定选择器） ==================
+def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_path):
+    """
+    使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件，保持浏览器打开。
+    附件按钮使用用户指定的 <span class="label-291">浏览此计算机</span> 定位。
+    """
+    print("=== 使用网页版 Outlook 发送邮件 ===")
+
+    # 从 config 中读取发件人账号密码
+    config = load_config_module()
+    email = getattr(config, 'SENDER_EMAIL', '')
+    password = getattr(config, 'SENDER_PASSWORD', '')
+    if not email or not password:
+        print("⚠️ 未在 config.py 中找到 SENDER_EMAIL 或 SENDER_PASSWORD，请先配置。")
+        return
+
+    driver_path = r"C:\XSR\githubPage\yanfeng\msedgedriver.exe"
+    if not os.path.exists(driver_path):
+        print(f"⚠️ 未找到 EdgeDriver: {driver_path}，请确认路径。")
+        return
+
+    options = EdgeOptions()
+    options.add_argument('--start-maximized')
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_experimental_option("detach", True)
+
+    service = EdgeService(driver_path)
+    driver = webdriver.Edge(service=service, options=options)
+    wait = WebDriverWait(driver, 60)
+
+    try:
+        print("正在打开 Outlook 网页版...")
+        driver.get("https://outlook.office.com/mail/")
+        time.sleep(5)
+
+        # ---------- 登录 ----------
+        email_input = wait.until(EC.presence_of_element_located((By.NAME, "loginfmt")))
+        email_input.clear()
+        email_input.send_keys(email)
+        next_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
+        next_btn.click()
+        print("已点击'下一步'")
+
+        time.sleep(2)
+        pwd_input = wait.until(EC.presence_of_element_located((By.NAME, "passwd")))
+        pwd_input.clear()
+        pwd_input.send_keys(password)
+        time.sleep(1)
+        signin_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
+        signin_btn.click()
+        print("已点击'登录'")
+
+        try:
+            stay_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='是']")))
+            stay_btn.click()
+        except:
+            pass
+
+        # 等待邮箱主界面加载
+        print("等待邮箱主界面加载...")
+        wait.until(EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'新邮件')]")))
+        print("登录成功，邮箱已加载")
+
+        # ---------- 点击“新邮件” ----------
+        print("点击'新邮件'按钮...")
+        new_mail_clicked = False
+        for attempt in range(3):
+            try:
+                elem = driver.find_element(By.XPATH, "//span[contains(text(),'新邮件')]")
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
+                time.sleep(0.5)
+                elem.click()
+                new_mail_clicked = True
+                break
+            except:
+                time.sleep(0.5)
+        if not new_mail_clicked:
+            print("尝试快捷键 Ctrl+N...")
+            ActionChains(driver).key_down(Keys.CONTROL).send_keys('n').key_up(Keys.CONTROL).perform()
+
+        # ---------- 等待撰写面板 ----------
+        if new_mail_clicked:
+            print("等待新邮件撰写面板加载（最多60秒）...")
+            # 等待页面文档加载完成
+            try:
+                WebDriverWait(driver, 30).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+                print("  页面文档加载完成")
+            except TimeoutException:
+                print("  ⚠️ 文档加载超时，但继续尝试")
+
+            # 等待收件人输入框
+            recipient_div = None
+            try:
+                recipient_div = WebDriverWait(driver, 60, poll_frequency=1).until(
+                    EC.presence_of_element_located((By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']"))
+                )
+                print("新邮件撰写面板已加载")
+            except TimeoutException:
+                # 检查是否在新窗口
+                if len(driver.window_handles) > 1:
+                    driver.switch_to.window(driver.window_handles[-1])
+                    print("切换到新窗口")
+                    recipient_div = WebDriverWait(driver, 60, poll_frequency=1).until(
+                        EC.presence_of_element_located((By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']"))
+                    )
+                    print("新窗口中找到收件人输入框")
+                else:
+                    try:
+                        subject_input = WebDriverWait(driver, 30).until(
+                            EC.presence_of_element_located((By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']"))
+                        )
+                        print("检测到主题输入框，推测撰写面板已打开，但收件人未找到，稍后尝试填写")
+                        recipient_div = None
+                    except:
+                        raise TimeoutError("未能检测到撰写面板，请手动检查")
+
+            # ---------- 填写收件人 ----------
+            if recipient_div:
+                print("填写收件人...")
+                recipient_div.click()
+                recipient_div.send_keys(recipient)
+                recipient_div.send_keys("\n")
+                time.sleep(1)
+            else:
+                try:
+                    recipient_input = driver.find_element(By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']//input")
+                    recipient_input.send_keys(recipient)
+                    recipient_input.send_keys("\n")
+                    print("通过备用方式填写收件人")
+                except:
+                    print("⚠️ 未找到收件人输入框，请手动填写")
+
+            # ---------- 抄送 ----------
+            if cc:
+                print("尝试填写抄送...")
+                try:
+                    cc_link = driver.find_element(By.XPATH, "//span[contains(text(),'抄送') or contains(text(),'Cc')]")
+                    cc_link.click()
+                    time.sleep(0.5)
+                except:
+                    pass
+                try:
+                    cc_div = driver.find_element(By.XPATH, "//div[@aria-label='抄送' or @aria-label='Cc']")
+                    cc_div.click()
+                    cc_div.send_keys(cc)
+                    cc_div.send_keys("\n")
+                except Exception as e:
+                    print(f"抄送填写跳过: {e}")
+
+            # ---------- 主题 ----------
+            print("填写主题...")
+            subject_input = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']"))
+            )
+            subject_input.clear()
+            subject_input.send_keys(subject)
+
+            # ---------- 正文 ----------
+            print("填写邮件正文...")
+            body_div = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH, "//div[@role='textbox' and (@aria-label='邮件正文' or @aria-label='Message body')]"))
+            )
+            body_div.clear()
+            driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
+
+            # ---------- 附加附件（使用用户指定的选择器） ----------
+            if attachment_path and os.path.exists(attachment_path):
+                print(f"尝试添加附件: {attachment_path} ...")
+                try:
+                    # 点击“浏览此计算机”按钮（使用精确的 span 选择器）
+                    attach_span = WebDriverWait(driver, 20).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "span.label-291"))
+                    )
+                    # 滚动到可见并点击
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_span)
+                    time.sleep(0.5)
+                    attach_span.click()
+                    print("  已点击“浏览此计算机”")
+                    time.sleep(1)
+
+                    # 等待文件选择对话框出现（input[type=file]）
+                    file_input = WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
+                    )
+                    file_input.send_keys(os.path.abspath(attachment_path))
+                    print("  附件已上传")
+                    time.sleep(2)  # 等待上传完成
+                except Exception as e:
+                    print(f"  附件上传失败: {e}，请手动添加附件。")
+            else:
+                if attachment_path:
+                    print(f"  附件不存在: {attachment_path}，跳过附加。")
+
+            print("\n✅ 邮件已填写完成，请检查附件并手动点击发送。")
+            print("浏览器将保持打开，您可以安全地关闭此终端窗口。")
+        else:
+            print("❌ 未能点击'新邮件'按钮，请手动操作。")
+
+    except Exception as e:
+        print(f"❌ 网页版邮件填写失败: {e}")
+        import traceback
+        traceback.print_exc()
+        print("浏览器保持打开以便调试，请手动检查。")
+
+# ================== 发送邮件（网页版 Outlook） ==================
+print("\n正在通过网页版 Outlook 发送邮件...")
+attachment_file = "C:/XSR/githubPage/yanfeng/库存数据/专业库存图表.pdf"   # 固定附件路径
+recipient = "liang.cao@yanfeng.com"
+subject = "库存统计报告 - 专业图表"
+html_body = (
+    "请查收附件中的库存统计图表 PDF 文件。<br><br>"
+    "<a href=\"https://shidingtech.cn/yanfeng/%E5%BA%93%E5%AD%98%E6%95%B0%E6%8D%AE/%E4%B8%93%E4%B8%9A%E5%BA%93%E5%AD%98%E5%9B%BE%E8%A1%A8.html\">点击此处</a>，查看网页版图表"
+)
+
+# 调用网页版发送函数，自动附加 PDF
+send_web_mail_with_attachment(recipient, "", subject, html_body, attachment_file)
+
+# ================== 自动执行Git提交和推送 ==================
+try:
+    # 切换到仓库根目录
+    repo_root = "C:/XSR/githubPage"
+    os.chdir(repo_root)
+    print(f"切换到仓库目录: {repo_root}")
+
+    # 获取今天的日期
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    commit_message = f"{today_date}更新"
+
+    # 执行Git命令
+    commands = [
+        ["git", "add", "."],
+        ["git", "commit", "-m", commit_message],
+        ["git", "push", "origin", "main"]
+    ]
+
+    for cmd in commands:
+        print(f"执行命令: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        if result.returncode == 0:
+            print(f"成功: {result.stdout.strip()}")
+        else:
+            print(f"失败: {result.stderr.strip()}")
+
+    print("Git操作完成")
+
+except Exception as e:
+    print(f"Git操作失败: {e}")
