@@ -557,10 +557,10 @@ html_to_pdf(html_path, pdf_path)
 def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_path):
     """
     使用 Edge 浏览器打开 Outlook 网页版，填写邮件并附加附件（通过拖拽上传），保持浏览器打开。
+    优化版：登录后立即尝试操作，缩短等待时间。
     """
     print("=== 使用网页版 Outlook 发送邮件 ===")
 
-    # 从 config 中读取发件人账号密码
     config = load_config_module()
     email = getattr(config, 'SENDER_EMAIL', '')
     password = getattr(config, 'SENDER_PASSWORD', '')
@@ -583,12 +583,12 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
 
     service = EdgeService(driver_path)
     driver = webdriver.Edge(service=service, options=options)
-    wait = WebDriverWait(driver, 60)
+    wait = WebDriverWait(driver, 60)  # 总体超时仍保留，用于兜底
 
     try:
         print("正在打开 Outlook 网页版...")
         driver.get("https://outlook.office.com/mail/")
-        time.sleep(5)
+        time.sleep(5)  # 初始加载等待
 
         # ---------- 登录 ----------
         email_input = wait.until(EC.presence_of_element_located((By.NAME, "loginfmt")))
@@ -607,173 +607,180 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
         signin_btn.click()
         print("已点击'登录'")
 
+        # 处理可能出现的“保持登录”提示
         try:
             stay_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='是']")))
             stay_btn.click()
         except:
             pass
 
+        # ---------- 优化点1：登录后立即尝试查找“新邮件”按钮 ----------
         print("等待邮箱主界面加载...")
-        wait.until(EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'新邮件')]")))
+        # 先尝试快速查找（立即执行），若失败则等待最多5秒
+        new_mail_btn = None
+        try:
+            new_mail_btn = driver.find_element(By.XPATH, "//span[contains(text(),'新邮件')]")
+            print("立即找到“新邮件”按钮")
+        except:
+            try:
+                new_mail_btn = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'新邮件')]"))
+                )
+                print("短等待后找到“新邮件”按钮")
+            except:
+                print("⚠️ 5秒内未找到“新邮件”按钮，使用更长等待（10秒）")
+                new_mail_btn = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'新邮件')]"))
+                )
         print("登录成功，邮箱已加载")
 
         # ---------- 点击“新邮件” ----------
         print("点击'新邮件'按钮...")
-        new_mail_clicked = False
-        for attempt in range(3):
-            try:
-                elem = driver.find_element(By.XPATH, "//span[contains(text(),'新邮件')]")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
-                time.sleep(0.5)
-                elem.click()
-                new_mail_clicked = True
-                break
-            except:
-                time.sleep(0.5)
-        if not new_mail_clicked:
-            print("尝试快捷键 Ctrl+N...")
-            ActionChains(driver).key_down(Keys.CONTROL).send_keys('n').key_up(Keys.CONTROL).perform()
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", new_mail_btn)
+        time.sleep(0.3)
+        driver.execute_script("arguments[0].click();", new_mail_btn)  # 使用JS点击更可靠
 
-        # ---------- 等待撰写面板 ----------
-        if new_mail_clicked:
-            print("等待新邮件撰写面板加载（最多60秒）...")
+        # ---------- 优化点2：点击后立即尝试查找收件人输入框 ----------
+        print("等待新邮件撰写面板加载...")
+        recipient_div = None
+        try:
+            recipient_div = driver.find_element(By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']")
+            print("立即找到收件人输入框")
+        except:
             try:
-                WebDriverWait(driver, 30).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-                print("  页面文档加载完成")
-            except TimeoutException:
-                print("  ⚠️ 文档加载超时，但继续尝试")
-
-            # 等待收件人输入框
-            recipient_div = None
-            try:
-                recipient_div = WebDriverWait(driver, 60, poll_frequency=1).until(
+                recipient_div = WebDriverWait(driver, 5).until(
                     EC.presence_of_element_located((By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']"))
                 )
-                print("新邮件撰写面板已加载")
-            except TimeoutException:
+                print("短等待后找到收件人输入框")
+            except:
+                # 检查是否在新窗口
                 if len(driver.window_handles) > 1:
                     driver.switch_to.window(driver.window_handles[-1])
                     print("切换到新窗口")
-                    recipient_div = WebDriverWait(driver, 60, poll_frequency=1).until(
-                        EC.presence_of_element_located((By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']"))
-                    )
-                    print("新窗口中找到收件人输入框")
-                else:
                     try:
-                        subject_input = WebDriverWait(driver, 30).until(
-                            EC.presence_of_element_located((By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']"))
+                        recipient_div = WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']"))
                         )
-                        print("检测到主题输入框，推测撰写面板已打开，但收件人未找到，稍后尝试填写")
-                        recipient_div = None
+                        print("在新窗口找到收件人输入框")
                     except:
-                        raise TimeoutError("未能检测到撰写面板，请手动检查")
+                        # 最后尝试检测主题输入框作为备选
+                        try:
+                            subject_input = WebDriverWait(driver, 5).until(
+                                EC.presence_of_element_located((By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']"))
+                            )
+                            print("检测到主题输入框，推测撰写面板已打开，但收件人未找到，稍后尝试填写")
+                            recipient_div = None
+                        except:
+                            raise TimeoutError("未能检测到撰写面板，请手动检查")
+                else:
+                    raise TimeoutError("未能检测到撰写面板，请手动检查")
 
-            # ---------- 填写收件人 ----------
-            if recipient_div:
-                print("填写收件人...")
-                recipient_div.click()
-                recipient_div.send_keys(recipient)
-                recipient_div.send_keys("\n")
-                time.sleep(1)
-            else:
-                try:
-                    recipient_input = driver.find_element(By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']//input")
-                    recipient_input.send_keys(recipient)
-                    recipient_input.send_keys("\n")
-                    print("通过备用方式填写收件人")
-                except:
-                    print("⚠️ 未找到收件人输入框，请手动填写")
+        # ---------- 填写收件人 ----------
+        if recipient_div:
+            print("填写收件人...")
+            recipient_div.click()
+            recipient_div.send_keys(recipient)
+            recipient_div.send_keys("\n")
+            time.sleep(0.5)
+        else:
+            # 尝试通过备用方式填写
+            try:
+                recipient_input = driver.find_element(By.XPATH, "//div[@aria-label='收件人' or @aria-label='To']//input")
+                recipient_input.send_keys(recipient)
+                recipient_input.send_keys("\n")
+                print("通过备用方式填写收件人")
+            except:
+                print("⚠️ 未找到收件人输入框，请手动填写")
 
-            # ---------- 抄送 ----------
-            if cc:
-                print("尝试填写抄送...")
-                try:
-                    cc_link = driver.find_element(By.XPATH, "//span[contains(text(),'抄送') or contains(text(),'Cc')]")
-                    cc_link.click()
-                    time.sleep(0.5)
-                except:
-                    pass
-                try:
-                    cc_div = driver.find_element(By.XPATH, "//div[@aria-label='抄送' or @aria-label='Cc']")
-                    cc_div.click()
-                    cc_div.send_keys(cc)
-                    cc_div.send_keys("\n")
-                except Exception as e:
-                    print(f"抄送填写跳过: {e}")
+        # ---------- 抄送 ----------
+        if cc:
+            print("尝试填写抄送...")
+            try:
+                cc_link = driver.find_element(By.XPATH, "//span[contains(text(),'抄送') or contains(text(),'Cc')]")
+                cc_link.click()
+                time.sleep(0.3)
+            except:
+                pass
+            try:
+                cc_div = driver.find_element(By.XPATH, "//div[@aria-label='抄送' or @aria-label='Cc']")
+                cc_div.click()
+                cc_div.send_keys(cc)
+                cc_div.send_keys("\n")
+            except Exception as e:
+                print(f"抄送填写跳过: {e}")
 
-            # ---------- 主题 ----------
-            print("填写主题...")
-            subject_input = WebDriverWait(driver, 30).until(
+        # ---------- 主题（立即尝试） ----------
+        print("填写主题...")
+        try:
+            subject_input = driver.find_element(By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']")
+        except:
+            subject_input = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.XPATH, "//input[@placeholder='添加主题' or @placeholder='Add a subject']"))
             )
-            subject_input.clear()
-            subject_input.send_keys(subject)
+        subject_input.clear()
+        subject_input.send_keys(subject)
 
-            # ---------- 正文 ----------
-            print("填写邮件正文...")
-            body_div = WebDriverWait(driver, 30).until(
+        # ---------- 正文（立即尝试） ----------
+        print("填写邮件正文...")
+        try:
+            body_div = driver.find_element(By.XPATH, "//div[@role='textbox' and (@aria-label='邮件正文' or @aria-label='Message body')]")
+        except:
+            body_div = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.XPATH, "//div[@role='textbox' and (@aria-label='邮件正文' or @aria-label='Message body')]"))
             )
-            body_div.clear()
-            driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
+        body_div.clear()
+        driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
 
-            # ---------- 附加附件（使用拖拽方式） ----------
-            if attachment_path and os.path.exists(attachment_path):
-                print(f"尝试通过拖拽添加附件: {attachment_path} ...")
-                try:
-                    import base64
-                    with open(attachment_path, "rb") as f:
-                        file_data = f.read()
-                    file_b64 = base64.b64encode(file_data).decode('utf-8')
-                    file_name = os.path.basename(attachment_path)
-                    ext = os.path.splitext(file_name)[1].lower()
-                    mime_map = {'.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.png': 'image/png', '.jpg': 'image/jpeg'}
-                    mime_type = mime_map.get(ext, 'application/octet-stream')
+        # ---------- 附加附件（拖拽方式，保持不变） ----------
+        if attachment_path and os.path.exists(attachment_path):
+            print(f"尝试通过拖拽添加附件: {attachment_path} ...")
+            try:
+                import base64
+                with open(attachment_path, "rb") as f:
+                    file_data = f.read()
+                file_b64 = base64.b64encode(file_data).decode('utf-8')
+                file_name = os.path.basename(attachment_path)
+                ext = os.path.splitext(file_name)[1].lower()
+                mime_map = {'.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.png': 'image/png', '.jpg': 'image/jpeg'}
+                mime_type = mime_map.get(ext, 'application/octet-stream')
 
-                    js_drop = """
-                        var fileData = arguments[0];
-                        var fileName = arguments[1];
-                        var mimeType = arguments[2];
-                        var target = arguments[3];
-                        
-                        var byteCharacters = atob(fileData);
-                        var byteNumbers = new Array(byteCharacters.length);
-                        for (var i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                        }
-                        var byteArray = new Uint8Array(byteNumbers);
-                        var blob = new Blob([byteArray], {type: mimeType});
-                        
-                        var file = new File([blob], fileName, {type: mimeType});
-                        var dataTransfer = new DataTransfer();
-                        dataTransfer.items.add(file);
-                        
-                        // 触发 drop 事件
-                        var dropEvent = new DragEvent('drop', {
-                            bubbles: true,
-                            cancelable: true,
-                            dataTransfer: dataTransfer
-                        });
-                        target.dispatchEvent(dropEvent);
-                        
-                        // 有些页面需要同时触发 dragover 等事件，但 drop 已够
-                        return true;
-                    """
-                    driver.execute_script(js_drop, file_b64, file_name, mime_type, body_div)
-                    print("  附件已通过拖拽上传")
-                    time.sleep(2)
-                except Exception as e:
-                    print(f"  拖拽上传失败: {e}，请手动添加附件。")
-            else:
-                if attachment_path:
-                    print(f"  附件不存在: {attachment_path}，跳过附加。")
-
-            print("\n✅ 邮件已填写完成，请检查附件并手动点击发送。")
-            print("浏览器将保持打开，您可以安全地关闭此终端窗口。")
+                js_drop = """
+                    var fileData = arguments[0];
+                    var fileName = arguments[1];
+                    var mimeType = arguments[2];
+                    var target = arguments[3];
+                    
+                    var byteCharacters = atob(fileData);
+                    var byteNumbers = new Array(byteCharacters.length);
+                    for (var i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    var byteArray = new Uint8Array(byteNumbers);
+                    var blob = new Blob([byteArray], {type: mimeType});
+                    
+                    var file = new File([blob], fileName, {type: mimeType});
+                    var dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    
+                    var dropEvent = new DragEvent('drop', {
+                        bubbles: true,
+                        cancelable: true,
+                        dataTransfer: dataTransfer
+                    });
+                    target.dispatchEvent(dropEvent);
+                    return true;
+                """
+                driver.execute_script(js_drop, file_b64, file_name, mime_type, body_div)
+                print("  附件已通过拖拽上传")
+                time.sleep(2)
+            except Exception as e:
+                print(f"  拖拽上传失败: {e}，请手动添加附件。")
         else:
-            print("❌ 未能点击'新邮件'按钮，请手动操作。")
+            if attachment_path:
+                print(f"  附件不存在: {attachment_path}，跳过附加。")
+
+        print("\n✅ 邮件已填写完成，请检查附件并手动点击发送。")
+        print("浏览器将保持打开，您可以安全地关闭此终端窗口。")
 
     except Exception as e:
         print(f"❌ 网页版邮件填写失败: {e}")
@@ -807,7 +814,7 @@ try:
 
     # 执行Git命令
     commands = [
-        ["git", "add", "."],
+        ["git", "add", "C:\XSR\githubPage\yanfeng\库存数据\专业库存图表.html"],
         ["git", "commit", "-m", commit_message],
         ["git", "push", "origin", "main"]
     ]
