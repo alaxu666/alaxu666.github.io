@@ -639,7 +639,6 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
         # ---------- 等待撰写面板 ----------
         if new_mail_clicked:
             print("等待新邮件撰写面板加载（最多60秒）...")
-            # 等待页面文档加载完成
             try:
                 WebDriverWait(driver, 30).until(
                     lambda d: d.execute_script("return document.readyState") == "complete"
@@ -656,7 +655,6 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
                 )
                 print("新邮件撰写面板已加载")
             except TimeoutException:
-                # 检查是否在新窗口
                 if len(driver.window_handles) > 1:
                     driver.switch_to.window(driver.window_handles[-1])
                     print("切换到新窗口")
@@ -723,39 +721,66 @@ def send_web_mail_with_attachment(recipient, cc, subject, html_body, attachment_
             body_div.clear()
             driver.execute_script("arguments[0].innerHTML = arguments[1];", body_div, html_body)
 
-            # ---------- 附加附件（按流程：点击“附加文件” -> 点击“浏览此计算机” -> 选择文件） ----------
+            # ---------- 附加附件（增强版，带重试和详细日志） ----------
             if attachment_path and os.path.exists(attachment_path):
                 print(f"尝试添加附件: {attachment_path} ...")
-                try:
-                    # 1. 点击“附加文件”按钮（使用指定的 id）
-                    attach_btn = WebDriverWait(driver, 20).until(
-                        EC.element_to_be_clickable((By.ID, "620_21_8_8c7b840b-8f3f-e2f4-f1fa-7420c98fdb14"))
-                    )
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_btn)
-                    time.sleep(0.5)
-                    attach_btn.click()
-                    print("  已点击“附加文件”按钮")
-                    time.sleep(1)  # 等待下拉菜单出现
+                attachment_success = False
+                for attempt in range(2):  # 最多尝试2次
+                    try:
+                        # 1. 点击“附加文件”按钮（使用更稳定的选择器）
+                        # 优先使用 aria-label，若不存在则用 label 属性
+                        attach_btn = None
+                        try:
+                            attach_btn = WebDriverWait(driver, 10).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='附加文件']"))
+                            )
+                        except:
+                            try:
+                                attach_btn = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[label='附加文件']"))
+                                )
+                            except:
+                                # 回退到您提供的 ID（可能动态变化）
+                                attach_btn = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.ID, "620_21_8_8c7b840b-8f3f-e2f4-f1fa-7420c98fdb14"))
+                                )
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", attach_btn)
+                        time.sleep(0.5)
+                        driver.execute_script("arguments[0].click();", attach_btn)
+                        print("  已点击“附加文件”按钮")
+                        time.sleep(1.5)  # 等待下拉菜单出现
 
-                    # 2. 点击“浏览此计算机”按钮（span.label-291）
-                    browse_span = WebDriverWait(driver, 20).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "span.label-291"))
-                    )
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", browse_span)
-                    time.sleep(0.5)
-                    browse_span.click()
-                    print("  已点击“浏览此计算机”")
-                    time.sleep(1)  # 等待文件选择对话框
+                        # 2. 等待“浏览此计算机”出现并点击
+                        browse_span = WebDriverWait(driver, 15).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, "span.label-291"))
+                        )
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", browse_span)
+                        time.sleep(0.5)
+                        driver.execute_script("arguments[0].click();", browse_span)
+                        print("  已点击“浏览此计算机”")
+                        time.sleep(1)
 
-                    # 3. 定位 input[type=file] 并发送文件路径
-                    file_input = WebDriverWait(driver, 20).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-                    )
-                    file_input.send_keys(os.path.abspath(attachment_path))
-                    print("  附件已上传")
-                    time.sleep(2)  # 等待上传完成
-                except Exception as e:
-                    print(f"  附件上传失败: {e}，请手动添加附件。")
+                        # 3. 选择文件
+                        file_input = WebDriverWait(driver, 20).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
+                        )
+                        file_input.send_keys(os.path.abspath(attachment_path))
+                        print("  附件已上传")
+                        time.sleep(2)
+                        attachment_success = True
+                        break
+                    except Exception as e:
+                        print(f"  第 {attempt+1} 次尝试失败: {e}")
+                        # 如果失败，可能下拉菜单已打开但元素未找到，尝试点击页面其他地方关闭菜单再重试
+                        if attempt == 0:
+                            try:
+                                driver.find_element(By.TAG_NAME, "body").click()
+                                time.sleep(0.5)
+                            except:
+                                pass
+                        continue
+                if not attachment_success:
+                    print("  附件上传多次失败，请手动添加附件。")
             else:
                 if attachment_path:
                     print(f"  附件不存在: {attachment_path}，跳过附加。")
